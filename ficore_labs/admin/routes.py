@@ -114,7 +114,7 @@ def dashboard():
         logger.error(f"Error loading admin dashboard for {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_dashboard_error', default='An error occurred while loading the dashboard'), 'danger')
-        return redirect(url_for('personal_bp.error'))
+        return redirect(url_for('error/500.html'))
 
 @admin_bp.route('/users', methods=['GET'])
 @login_required
