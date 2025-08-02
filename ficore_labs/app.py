@@ -303,7 +303,7 @@ def create_app():
             logger.info('Created indexes for collections')
 
             # Setup admin user
-            admin_email = os.getenv('ADMIN_EMAIL', 'admin@bizcore.app')
+            admin_email = os.getenv('ADMIN_EMAIL', 'ficoreafrica@gmail.com')
             admin_password = os.getenv('ADMIN_PASSWORD')
             if not admin_password:
                 logger.error('ADMIN_PASSWORD environment variable is not set')
