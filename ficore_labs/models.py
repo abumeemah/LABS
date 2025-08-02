@@ -62,7 +62,7 @@ def initialize_app_data(app):
             # Drop unused collections (one-off migration)
             unused_collections = [
                 'bills', 'bill_reminders', 'budgets', 'shopping_items', 'shopping_lists',
-                'feedback', 'tool_usage', 'credit_requests', 'ficore_credit_transactions', 'agents'
+                'tool_usage', 'credit_requests', 'ficore_credit_transactions', 'agents'
             ]
             migration_flag = db_instance.system_config.find_one({'_id': 'migration_unused_collections_dropped'})
             if not migration_flag or not migration_flag.get('value'):
@@ -218,6 +218,28 @@ def initialize_app_data(app):
                     'indexes': [
                         {'key': [('user_id', ASCENDING)], 'unique': True},
                         {'key': [('expires_at', ASCENDING)], 'expireAfterSeconds': 604800}  # 7 days
+                    ]
+                },
+                'feedback': {
+                    'validator': {
+                        '$jsonSchema': {
+                            'bsonType': 'object',
+                            'required': ['tool_name', 'rating', 'timestamp'],
+                            'properties': {
+                                '_id': {'bsonType': 'objectId'},
+                                'user_id': {'bsonType': ['string', 'null']},
+                                'session_id': {'bsonType': 'string'},
+                                'tool_name': {'enum': ['profile', 'debtors', 'creditors', 'receipts', 'payment', 'report', 'fund', 'investor_report', 'forecast']},
+                                'rating': {'bsonType': 'int', 'minimum': 1, 'maximum': 5},
+                                'comment': {'bsonType': ['string', 'null']},
+                                'timestamp': {'bsonType': 'date'}
+                            }
+                        }
+                    },
+                    'indexes': [
+                        {'key': [('user_id', ASCENDING)], 'sparse': True},
+                        {'key': [('tool_name', ASCENDING)]},
+                        {'key': [('timestamp', DESCENDING)]}
                     ]
                 }
             }
@@ -789,6 +811,70 @@ def create_audit_log(db, audit_data):
         logger.error(f"{trans('general_audit_log_creation_error', default='Error creating audit log')}: {str(e)}", 
                     exc_info=True, extra={'session_id': audit_data.get('session_id', 'no-session-id')})
         raise
+
+def create_feedback(db, feedback_data):
+    """
+    Create a new feedback entry in the feedback collection.
+    
+    Args:
+        db: MongoDB database instance
+        feedback_data: Dictionary containing feedback information
+    
+    Returns:
+        str: ID of the created feedback entry
+    """
+    try:
+        required_fields = ['tool_name', 'rating', 'timestamp']
+        if not all(field in feedback_data for field in required_fields):
+            raise ValueError(trans('general_missing_feedback_fields', default='Missing required feedback fields'))
+        result = db.feedback.insert_one(feedback_data)
+        logger.info(f"{trans('general_feedback_created', default='Created feedback with ID')}: {result.inserted_id}", 
+                   extra={'session_id': feedback_data.get('session_id', 'no-session-id')})
+        return str(result.inserted_id)
+    except Exception as e:
+        logger.error(f"{trans('general_feedback_creation_error', default='Error creating feedback')}: {str(e)}", 
+                    exc_info=True, extra={'session_id': feedback_data.get('session_id', 'no-session-id')})
+        raise
+
+def get_feedback(db, filter_kwargs):
+    """
+    Retrieve feedback entries based on filter criteria.
+    
+    Args:
+        db: MongoDB database instance
+        filter_kwargs: Dictionary of filter criteria (e.g., {'user_id': 'user123', 'tool_name': 'debtors'})
+    
+    Returns:
+        list: List of feedback entries
+    """
+    try:
+        return list(db.feedback.find(filter_kwargs).sort('timestamp', DESCENDING))
+    except Exception as e:
+        logger.error(f"{trans('general_feedback_fetch_error', default='Error getting feedback')}: {str(e)}", 
+                    exc_info=True, extra={'session_id': 'no-session-id'})
+        raise
+
+def to_dict_feedback(record):
+    """
+    Convert feedback record to dictionary.
+    
+    Args:
+        record: Feedback document
+    
+    Returns:
+        dict: Feedback dictionary
+    """
+    if not record:
+        return {'tool_name': None, 'rating': None}
+    return {
+        'id': str(record.get('_id', '')),
+        'user_id': record.get('user_id', None),
+        'session_id': record.get('session_id', ''),
+        'tool_name': record.get('tool_name', ''),
+        'rating': record.get('rating', 0),
+        'comment': record.get('comment', None),
+        'timestamp': record.get('timestamp')
+    }
 
 def to_dict_user(user):
     """
