@@ -1,23 +1,10 @@
-from flask import Blueprint, jsonify, render_template, session, request, redirect, url_for
+from flask import Blueprint, jsonify, render_template, session, request
 from flask_login import current_user, login_required
 from datetime import datetime
 import utils
 from utils import logger
 
 business = Blueprint('business', __name__, url_prefix='/business')
-
-def get_notification_icon(notification_type):
-    """Return appropriate icon for notification type."""
-    icons = {
-        'email': 'bi-envelope',
-        'sms': 'bi-chat',
-        'whatsapp': 'bi-whatsapp',
-        'info': 'bi-info-circle',
-        'warning': 'bi-exclamation-triangle',
-        'error': 'bi-x-circle',
-        'success': 'bi-check-circle'
-    }
-    return icons.get(notification_type, 'bi-info-circle')
 
 @business.route('/home')
 @login_required
@@ -126,85 +113,6 @@ def view_data():
             title=utils.trans('error', lang=lang)
         ), 500
 
-@business.route('/notifications/count')
-@login_required
-@utils.requires_role(['trader', 'startup', 'admin'])
-@utils.limiter.limit('10 per minute')
-def notification_count():
-    """Fetch the count of unread notifications for the authenticated user."""
-    try:
-        db = utils.get_mongo_db()
-        user_id = current_user.id
-        count = db.bill_reminders.count_documents({'user_id': user_id, 'read_status': False})
-        logger.info(f"Fetched notification count for user {user_id}: {count}", 
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify({'count': count})
-    except Exception as e:
-        logger.error(f"Notification count error for user {user_id}: {str(e)}", 
-                     extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify({'error': utils.trans('notification_count_error')}), 500
-
-@business.route('/notifications')
-@login_required
-@utils.requires_role(['trader', 'startup', 'admin'])
-@utils.limiter.limit('10 per minute')
-def notifications():
-    """Fetch notifications for the authenticated user."""
-    try:
-        db = utils.get_mongo_db()
-        user_id = current_user.id
-        lang = session.get('lang', 'en')
-        notifications = list(db.bill_reminders.find({'user_id': user_id}).sort('sent_at', -1).limit(10))
-        logger.info(f"Fetched {len(notifications)} notifications for user {user_id}", 
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        result = [{
-            'id': str(n['notification_id']),
-            'message': utils.trans(n['message'], lang=lang),
-            'type': n['type'],
-            'timestamp': n['sent_at'].isoformat(),
-            'read': n.get('read_status', False)
-        } for n in notifications]
-        notification_ids = [n['notification_id'] for n in notifications if not n.get('read_status', False)]
-        if notification_ids:
-            db.bill_reminders.update_many(
-                {'notification_id': {'$in': notification_ids}, 'user_id': user_id},
-                {'$set': {'read_status': True}}
-            )
-            logger.info(f"Marked {len(notification_ids)} notifications read for user {user_id}", 
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify(result), 200
-    except Exception as e:
-        logger.error(f"Notifications error for user {user_id}: {str(e)}", 
-                     extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify({'error': utils.trans('notifications_error')}), 500
-
-@business.route('/recent_notifications')
-@login_required
-@utils.requires_role(['trader', 'startup', 'admin'])
-def recent_notifications():
-    """Fetch recent notifications for the authenticated user."""
-    try:
-        db = utils.get_mongo_db()
-        reminders = db.bill_reminders.find({
-            'user_id': current_user.id,
-            'sent_at': {'$exists': True}
-        }).sort('sent_at', -1).limit(5)
-        notifications = [
-            {
-                'message': reminder.get('message', ''),
-                'timestamp': reminder.get('sent_at').isoformat(),
-                'icon': get_notification_icon(reminder.get('type', 'info')),
-                'read': reminder.get('read_status', False)
-            } for reminder in reminders
-        ]
-        logger.info(f"Fetched recent notifications for user {current_user.id}", 
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify(notifications)
-    except Exception as e:
-        logger.error(f"Error fetching recent notifications for user {current_user.id}: {str(e)}", 
-                     extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
-        return jsonify({'error': utils.trans('notifications_error')}), 500
-
 @business.route('/debt/summary')
 @login_required
 @utils.requires_role(['trader', 'startup', 'admin'])
@@ -275,7 +183,7 @@ def cashflow_summary():
 @login_required
 @utils.requires_role(['trader', 'startup', 'admin'])
 def recent_activity():
-    """Fetch recent activities (debts, cashflows) for the authenticated user."""
+    """Fetch recent activities (debts, cashflows, feedback) for the authenticated user."""
     try:
         db = utils.get_mongo_db()
         user_id = current_user.id
@@ -285,18 +193,19 @@ def recent_activity():
         # Fetch recent debt records
         records = db.records.find({'user_id': user_id}).sort('created_at', -1).limit(3)
         for record in records:
-            activity_type = 'debt_added' if record.get('type') == 'debtor' else 'trader_registered'
+            activity_type = 'debtor_added' if record.get('type') == 'debtor' else 'creditor_added' if record.get('type') == 'creditor' else record.get('type') + '_added'
+            description_key = f"{record.get('type')}_added_description"
             description = utils.trans(
-                'debt_added_description' if record.get('type') == 'debtor' else 'trader_registered_description',
+                description_key,
                 lang=lang,
-                default=f'{"Owe" if record.get("type") == "debtor" else "Owed by"} {record.get("name")}'
+                default=f"{'Owed by' if record.get('type') == 'debtor' else 'Owe to' if record.get('type') == 'creditor' else record.get('type').capitalize()} {record.get('name', record.get('title', record.get('source', '')))}"
             )
             activities.append({
                 'type': activity_type,
                 'description': description,
-                'amount': record.get('amount_owed', 0),
+                'amount': record.get('amount_owed', record.get('amount', record.get('projected_revenue', 0))),
                 'timestamp': record.get('created_at').isoformat(),
-                'icon': 'bi-person-plus' if activity_type == 'trader_registered' else 'bi-plus-circle'
+                'icon': 'bi-person-plus' if record.get('type') in ['debtor', 'creditor'] else 'bi-file-earmark-plus'
             })
 
         # Fetch recent cashflows
@@ -306,7 +215,7 @@ def recent_activity():
             description = utils.trans(
                 'money_in_description' if cashflow.get('type') == 'receipt' else 'money_out_description',
                 lang=lang,
-                default=f'{"Received from" if cashflow.get("type") == "receipt" else "Paid to"} {cashflow.get("party_name")}'
+                default=f"{'Received from' if cashflow.get('type') == 'receipt' else 'Paid to'} {cashflow.get('party_name')}"
             )
             activities.append({
                 'type': activity_type,
@@ -314,6 +223,21 @@ def recent_activity():
                 'amount': cashflow.get('amount', 0),
                 'timestamp': cashflow.get('created_at').isoformat(),
                 'icon': 'bi-arrow-down-circle' if activity_type == 'money_in' else 'bi-arrow-up-circle'
+            })
+
+        # Fetch recent feedback
+        feedback_records = db.feedback.find({'user_id': user_id}).sort('timestamp', -1).limit(3)
+        for feedback in feedback_records:
+            activities.append({
+                'type': 'feedback_submitted',
+                'description': utils.trans(
+                    'feedback_submitted_description',
+                    lang=lang,
+                    default=f"Submitted feedback for {feedback.get('tool_name').capitalize()}"
+                ),
+                'amount': feedback.get('rating', 0),
+                'timestamp': feedback.get('timestamp').isoformat(),
+                'icon': 'bi-star-fill'
             })
 
         # Sort activities by timestamp (descending)
