@@ -442,6 +442,15 @@ def create_app():
             flash('Error fetching your data.', 'danger')
             return redirect(url_for('index'))
 
+    @app.route('/set_language/<lang>', methods=['GET'])
+    @ensure_session_id
+    def set_language(lang):
+        valid_langs = ['en', 'ha']
+        session['lang'] = lang if lang in valid_langs else 'en'
+        session.modified = True
+        logger.info(f"Language set to {session['lang']} for session {session.get('sid', 'no-session-id')}")
+        return redirect(request.referrer or url_for('index'))
+
     @app.errorhandler(404)
     def page_not_found(e):
         logger.error(f'Not found: {request.url}')
