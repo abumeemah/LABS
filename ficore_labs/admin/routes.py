@@ -10,51 +10,43 @@ import utils
 import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from reportlab.lib import colors
 from reportlab.lib.units import inch
 from io import BytesIO
 import csv
-from models import get_records, get_cashflows, get_audit_logs
+from models import get_records, get_cashflows
 
 logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint('admin', __name__, template_folder='templates/admin')
 
 # Form Definitions
-class TaxRateForm(FlaskForm):
-    role = SelectField(trans('tax_role', default='Role'), choices=[('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[DataRequired()], render_kw={'class': 'form-select'})
-    min_income = FloatField(trans('tax_min_income', default='Minimum Income'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
-    max_income = FloatField(trans('tax_max_income', default='Maximum Income'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
-    rate = FloatField(trans('tax_rate', default='Rate'), validators=[DataRequired(), NumberRange(min=0, max=1)], render_kw={'class': 'form-control'})
-    description = StringField(trans('tax_description', default='Description'), validators=[DataRequired()], render_kw={'class': 'form-control'})
-    submit = SubmitField(trans('tax_add_rate', default='Add Tax Rate'), render_kw={'class': 'btn btn-primary'})
-
-    def validate_max_income(self, field):
-        if field.data <= self.min_income.data:
-            raise ValidationError(trans('tax_max_income_error', default='Maximum income must be greater than minimum income.'))
-
 class RoleForm(FlaskForm):
     role = SelectField(trans('user_role', default='Role'), choices=[('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[DataRequired()], render_kw={'class': 'form-select'})
     submit = SubmitField(trans('user_update_role', default='Update Role'), render_kw={'class': 'btn btn-primary'})
 
-class PaymentLocationForm(FlaskForm):
-    name = StringField(trans('location_name', default='Location Name'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
-    address = StringField(trans('location_address', default='Address'), validators=[DataRequired(), validators.Length(min=5, max=200)], render_kw={'class': 'form-control'})
-    city = StringField(trans('location_city', default='City'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
-    country = StringField(trans('location_country', default='Country'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
-    submit = SubmitField(trans('location_add', default='Add Payment Location'), render_kw={'class': 'btn btn-primary'})
-
-class TaxDeadlineForm(FlaskForm):
-    role = SelectField(trans('tax_role', default='Role'), choices=[('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[DataRequired()], render_kw={'class': 'form-select'})
-    deadline_date = DateField(trans('tax_deadline_date', default='Deadline Date'), validators=[DataRequired()], format='%Y-%m-%d', render_kw={'class': 'form-control'})
-    description = StringField(trans('tax_description', default='Description'), validators=[DataRequired(), validators.Length(min=5, max=200)], render_kw={'class': 'form-control'})
-    submit = SubmitField(trans('tax_add_deadline', default='Add Tax Deadline'), render_kw={'class': 'btn btn-primary'})
-
 class SubscriptionForm(FlaskForm):
     is_subscribed = SelectField(trans('subscription_status', default='Subscription Status'), choices=[('True', 'Subscribed'), ('False', 'Not Subscribed')], validators=[DataRequired()], render_kw={'class': 'form-select'})
-    subscription_plan = SelectField(trans('subscription_plan', default='Subscription Plan'), choices=[('', 'None'), ('monthly', 'Monthly'), ('yearly', 'Yearly')], render_kw={'class': 'form-select'})
+    subscription_plan = SelectField(trans('subscription_plan', default='Subscription Plan'), choices=[('', 'None'), ('monthly', 'Monthly (₦1k)'), ('yearly', 'Yearly (₦10k)')], render_kw={'class': 'form-select'})
     subscription_end = DateField(trans('subscription_end', default='Subscription End Date'), format='%Y-%m-%d', validators=[validators.Optional()], render_kw={'class': 'form-control'})
     submit = SubmitField(trans('subscription_update', default='Update Subscription'), render_kw={'class': 'btn btn-primary'})
+
+class DebtorForm(FlaskForm):
+    name = StringField(trans('debtor_name', default='Debtor Name'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
+    amount = FloatField(trans('debtor_amount', default='Amount Owed'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
+    due_date = DateField(trans('debtor_due_date', default='Due Date'), validators=[DataRequired()], format='%Y-%m-%d', render_kw={'class': 'form-control'})
+    submit = SubmitField(trans('debtor_add', default='Add Debtor'), render_kw={'class': 'btn btn-primary'})
+
+class CreditorForm(FlaskForm):
+    name = StringField(trans('creditor_name', default='Creditor Name'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
+    amount = FloatField(trans('creditor_amount', default='Amount Owed'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
+    due_date = DateField(trans('creditor_due_date', default='Due Date'), validators=[DataRequired()], format='%Y-%m-%d', render_kw={'class': 'form-control'})
+    submit = SubmitField(trans('creditor_add', default='Add Creditor'), render_kw={'class': 'btn btn-primary'})
+
+class FundForm(FlaskForm):
+    source = StringField(trans('fund_source', default='Funding Source'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
+    amount = FloatField(trans('fund_amount', default='Amount'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
+    received_date = DateField(trans('fund_received_date', default='Received Date'), validators=[DataRequired()], format='%Y-%m-%d', render_kw={'class': 'form-control'})
+    submit = SubmitField(trans('fund_add', default='Add Fund'), render_kw={'class': 'btn btn-primary'})
 
 # Helper Functions
 def log_audit_action(action, details=None):
@@ -80,24 +72,19 @@ def dashboard():
     """Admin dashboard with system statistics."""
     try:
         db = utils.get_mongo_db()
-        
-        # Calculate system statistics
         stats = {
             'users': db.users.count_documents({}),
             'records': db.records.count_documents({}),
             'cashflows': db.cashflows.count_documents({}),
-            'audit_logs': db.audit_logs.count_documents({}),
-            'payment_locations': db.payment_locations.count_documents({}),
-            'tax_deadlines': db.tax_deadlines.count_documents({}),
-            'tax_rates': db.tax_rates.count_documents({})
+            'debtors': db.debtors.count_documents({}),
+            'creditors': db.creditors.count_documents({}),
+            'funds': db.funds.count_documents({}),
+            'audit_logs': db.audit_logs.count_documents({})
         }
-        
-        # Get recent users with subscription status
         recent_users = list(db.users.find().sort('created_at', -1).limit(5))
         for user in recent_users:
             user['_id'] = str(user['_id'])
             user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
-        
         logger.info(f"Admin {current_user.id} accessed dashboard at {datetime.datetime.utcnow()}",
                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         return render_template(
@@ -178,6 +165,9 @@ def delete_user(user_id):
             return redirect(url_for('admin.manage_users'))
         db.records.delete_many({'user_id': user_id})
         db.cashflows.delete_many({'user_id': user_id})
+        db.debtors.delete_many({'user_id': user_id})
+        db.creditors.delete_many({'user_id': user_id})
+        db.funds.delete_many({'user_id': user_id})
         db.audit_logs.delete_many({'details.user_id': user_id})
         result = db.users.delete_one(user_query)
         if result.deleted_count == 0:
@@ -200,7 +190,7 @@ def delete_user(user_id):
 @utils.limiter.limit("10 per hour")
 def delete_item(collection, item_id):
     """Delete an item from a collection."""
-    valid_collections = ['records', 'cashflows', 'payment_locations', 'tax_deadlines', 'tax_rates']
+    valid_collections = ['records', 'cashflows', 'debtors', 'creditors', 'funds']
     if collection not in valid_collections:
         flash(trans('admin_invalid_collection', default='Invalid collection selected'), 'danger')
         return redirect(url_for('admin.dashboard'))
@@ -214,303 +204,12 @@ def delete_item(collection, item_id):
             logger.info(f"Admin {current_user.id} deleted {collection} item {item_id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action(f'delete_{collection}_item', {'item_id': item_id, 'collection': collection})
-        return redirect(url_for(f'admin.{collection.replace("_", "")}' if collection in ['payment_locations', 'tax_deadlines', 'tax_rates'] else 'admin.dashboard'))
+        return redirect(url_for(f'admin.{collection}'))
     except Exception as e:
         logger.error(f"Error deleting {collection} item {item_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return redirect(url_for('admin.dashboard'))
-
-@admin_bp.route('/audit', methods=['GET'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("50 per hour")
-def audit():
-    """View audit logs of admin actions."""
-    try:
-        db = utils.get_mongo_db()
-        logs = list(get_audit_logs(db, {}).sort('timestamp', -1).limit(100))
-        for log in logs:
-            log['_id'] = str(log['_id'])
-        return render_template('admin/audit.html', logs=logs, title=trans('admin_audit_title', default='Audit Logs'))
-    except Exception as e:
-        logger.error(f"Error fetching audit logs for admin {current_user.id}: {str(e)}",
-                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/audit.html', logs=[])
-
-@admin_bp.route('/payment_locations', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("50 per hour")
-def manage_payment_locations():
-    """Manage payment locations: list all locations and add new ones."""
-    db = utils.get_mongo_db()
-    form = PaymentLocationForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            location = {
-                'name': form.name.data,
-                'address': form.address.data,
-                'city': form.city.data,
-                'country': form.country.data,
-                'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
-            }
-            result = db.payment_locations.insert_one(location)
-            location_id = str(result.inserted_id)
-            logger.info(f"Payment location added: id={location_id}, name={form.name.data}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_payment_location', {'location_id': location_id, 'name': form.name.data})
-            flash(trans('payment_location_added', default='Payment location added successfully'), 'success')
-            return redirect(url_for('admin.manage_payment_locations'))
-        except Exception as e:
-            logger.error(f"Error adding payment location: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/payment_locations.html', form=form, locations=[])
-    
-    locations = list(db.payment_locations.find().sort('created_at', -1))
-    for location in locations:
-        location['_id'] = str(location['_id'])
-    return render_template('admin/payment_locations.html', form=form, locations=locations, title=trans('admin_payment_locations_title', default='Manage Payment Locations'))
-
-@admin_bp.route('/payment_locations/edit/<location_id>', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def edit_payment_location(location_id):
-    """Edit an existing payment location."""
-    db = utils.get_mongo_db()
-    location = db.payment_locations.find_one({'_id': ObjectId(location_id)})
-    if not location:
-        flash(trans('payment_location_not_found', default='Payment location not found'), 'danger')
-        return redirect(url_for('admin.manage_payment_locations'))
-    
-    form = PaymentLocationForm(obj=location)
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            db.payment_locations.update_one(
-                {'_id': ObjectId(location_id)},
-                {'$set': {
-                    'name': form.name.data,
-                    'address': form.address.data,
-                    'city': form.city.data,
-                    'country': form.country.data,
-                    'updated_at': datetime.datetime.utcnow()
-                }}
-            )
-            logger.info(f"Payment location updated: id={location_id}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('edit_payment_location', {'location_id': location_id})
-            flash(trans('payment_location_updated', default='Payment location updated successfully'), 'success')
-            return redirect(url_for('admin.manage_payment_locations'))
-        except Exception as e:
-            logger.error(f"Error updating payment location {location_id}: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/payment_location_edit.html', form=form, location=location, title=trans('admin_edit_payment_location_title', default='Edit Payment Location'))
-    
-    return render_template('admin/payment_location_edit.html', form=form, location=location, title=trans('admin_edit_payment_location_title', default='Edit Payment Location'))
-
-@admin_bp.route('/payment_locations/delete/<location_id>', methods=['POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def delete_payment_location(location_id):
-    """Delete a payment location."""
-    db = utils.get_mongo_db()
-    result = db.payment_locations.delete_one({'_id': ObjectId(location_id)})
-    if result.deleted_count > 0:
-        logger.info(f"Payment location deleted: id={location_id}, user={current_user.id}",
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-        log_audit_action('delete_payment_location', {'location_id': location_id})
-        flash(trans('payment_location_deleted', default='Payment location deleted successfully'), 'success')
-    else:
-        flash(trans('payment_location_not_found', default='Payment location not found'), 'danger')
-    return redirect(url_for('admin.manage_payment_locations'))
-
-@admin_bp.route('/tax_deadlines', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("50 per hour")
-def manage_tax_deadlines():
-    """Manage tax deadlines: list all deadlines and add new ones."""
-    db = utils.get_mongo_db()
-    form = TaxDeadlineForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            deadline = {
-                'role': form.role.data,
-                'deadline_date': form.deadline_date.data,
-                'description': form.description.data,
-                'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
-            }
-            result = db.tax_deadlines.insert_one(deadline)
-            deadline_id = str(result.inserted_id)
-            logger.info(f"Tax deadline added: id={deadline_id}, role={form.role.data}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_tax_deadline', {'deadline_id': deadline_id, 'role': form.role.data})
-            flash(trans('tax_deadline_added', default='Tax deadline added successfully'), 'success')
-            return redirect(url_for('admin.manage_tax_deadlines'))
-        except Exception as e:
-            logger.error(f"Error adding tax deadline: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/tax_deadlines.html', form=form, deadlines=[])
-    
-    deadlines = list(db.tax_deadlines.find().sort('deadline_date', -1))
-    for deadline in deadlines:
-        deadline['_id'] = str(deadline['_id'])
-    return render_template('admin/tax_deadlines.html', form=form, deadlines=deadlines, title=trans('admin_tax_deadlines_title', default='Manage Tax Deadlines'))
-
-@admin_bp.route('/tax_deadlines/edit/<deadline_id>', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def edit_tax_deadline(deadline_id):
-    """Edit an existing tax deadline."""
-    db = utils.get_mongo_db()
-    deadline = db.tax_deadlines.find_one({'_id': ObjectId(deadline_id)})
-    if not deadline:
-        flash(trans('tax_deadline_not_found', default='Tax deadline not found'), 'danger')
-        return redirect(url_for('admin.manage_tax_deadlines'))
-    
-    form = TaxDeadlineForm(obj=deadline)
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            db.tax_deadlines.update_one(
-                {'_id': ObjectId(deadline_id)},
-                {'$set': {
-                    'role': form.role.data,
-                    'deadline_date': form.deadline_date.data,
-                    'description': form.description.data,
-                    'updated_at': datetime.datetime.utcnow()
-                }}
-            )
-            logger.info(f"Tax deadline updated: id={deadline_id}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('edit_tax_deadline', {'deadline_id': deadline_id})
-            flash(trans('tax_deadline_updated', default='Tax deadline updated successfully'), 'success')
-            return redirect(url_for('admin.manage_tax_deadlines'))
-        except Exception as e:
-            logger.error(f"Error updating tax deadline {deadline_id}: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/tax_deadline_edit.html', form=form, deadline=deadline, title=trans('admin_edit_tax_deadline_title', default='Edit Tax Deadline'))
-    
-    return render_template('admin/tax_deadline_edit.html', form=form, deadline=deadline, title=trans('admin_edit_tax_deadline_title', default='Edit Tax Deadline'))
-
-@admin_bp.route('/tax_deadlines/delete/<deadline_id>', methods=['POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def delete_tax_deadline(deadline_id):
-    """Delete a tax deadline."""
-    db = utils.get_mongo_db()
-    result = db.tax_deadlines.delete_one({'_id': ObjectId(deadline_id)})
-    if result.deleted_count > 0:
-        logger.info(f"Tax deadline deleted: id={deadline_id}, user={current_user.id}",
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-        log_audit_action('delete_tax_deadline', {'deadline_id': deadline_id})
-        flash(trans('tax_deadline_deleted', default='Tax deadline deleted successfully'), 'success')
-    else:
-        flash(trans('tax_deadline_not_found', default='Tax deadline not found'), 'danger')
-    return redirect(url_for('admin.manage_tax_deadlines'))
-
-@admin_bp.route('/tax_rates', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("50 per hour")
-def manage_tax_rates():
-    """Manage tax rates: list all tax rates and add new ones."""
-    db = utils.get_mongo_db()
-    form = TaxRateForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            tax_rate = {
-                'role': form.role.data,
-                'min_income': form.min_income.data,
-                'max_income': form.max_income.data,
-                'rate': form.rate.data,
-                'description': form.description.data,
-                'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
-            }
-            result = db.tax_rates.insert_one(tax_rate)
-            rate_id = str(result.inserted_id)
-            logger.info(f"Tax rate added: id={rate_id}, role={form.role.data}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_tax_rate', {'rate_id': rate_id, 'role': form.role.data})
-            flash(trans('tax_rate_added', default='Tax rate added successfully'), 'success')
-            return redirect(url_for('admin.manage_tax_rates'))
-        except Exception as e:
-            logger.error(f"Error adding tax rate: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/tax_rates.html', form=form, rates=[])
-    
-    rates = list(db.tax_rates.find().sort('created_at', -1))
-    for rate in rates:
-        rate['_id'] = str(rate['_id'])
-    return render_template('admin/tax_rates.html', form=form, rates=rates, title=trans('admin_tax_rates_title', default='Manage Tax Rates'))
-
-@admin_bp.route('/tax_rates/edit/<rate_id>', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def edit_tax_rate(rate_id):
-    """Edit an existing tax rate."""
-    db = utils.get_mongo_db()
-    rate = db.tax_rates.find_one({'_id': ObjectId(rate_id)})
-    if not rate:
-        flash(trans('tax_rate_not_found', default='Tax rate not found'), 'danger')
-        return redirect(url_for('admin.manage_tax_rates'))
-    
-    form = TaxRateForm(obj=rate)
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
-            db.tax_rates.update_one(
-                {'_id': ObjectId(rate_id)},
-                {'$set': {
-                    'role': form.role.data,
-                    'min_income': form.min_income.data,
-                    'max_income': form.max_income.data,
-                    'rate': form.rate.data,
-                    'description': form.description.data,
-                    'updated_at': datetime.datetime.utcnow()
-                }}
-            )
-            logger.info(f"Tax rate updated: id={rate_id}, user={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('edit_tax_rate', {'rate_id': rate_id})
-            flash(trans('tax_rate_updated', default='Tax rate updated successfully'), 'success')
-            return redirect(url_for('admin.manage_tax_rates'))
-        except Exception as e:
-            logger.error(f"Error updating tax rate {rate_id}: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/tax_rate_edit.html', form=form, rate=rate, title=trans('admin_edit_tax_rate_title', default='Edit Tax Rate'))
-    
-    return render_template('admin/tax_rate_edit.html', form=form, rate=rate, title=trans('admin_edit_tax_rate_title', default='Edit Tax Rate'))
-
-@admin_bp.route('/tax_rates/delete/<rate_id>', methods=['POST'])
-@login_required
-@utils.requires_role('admin')
-@utils.limiter.limit("10 per hour")
-def delete_tax_rate(rate_id):
-    """Delete a tax rate."""
-    db = utils.get_mongo_db()
-    result = db.tax_rates.delete_one({'_id': ObjectId(rate_id)})
-    if result.deleted_count > 0:
-        logger.info(f"Tax rate deleted: id={rate_id}, user={current_user.id}",
-                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-        log_audit_action('delete_tax_rate', {'rate_id': rate_id})
-        flash(trans('tax_rate_deleted', default='Tax rate deleted successfully'), 'success')
-    else:
-        flash(trans('tax_rate_not_found', default='Tax rate not found'), 'danger')
-    return redirect(url_for('admin.manage_tax_rates'))
 
 @admin_bp.route('/users/roles', methods=['GET', 'POST'])
 @login_required
@@ -579,7 +278,6 @@ def manage_user_subscriptions():
                 'updated_at': datetime.datetime.utcnow()
             }
             if form.is_subscribed.data == 'True' and not form.subscription_end.data:
-                # Default to 30 days for monthly, 365 days for yearly if no end date provided
                 duration = 365 if form.subscription_plan.data == 'yearly' else 30
                 update_data['subscription_end'] = datetime.datetime.utcnow() + datetime.timedelta(days=duration)
             db.users.update_one(
@@ -602,6 +300,165 @@ def manage_user_subscriptions():
         user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
     return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
 
+@admin_bp.route('/audit', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def audit():
+    """View audit logs of admin actions."""
+    try:
+        db = utils.get_mongo_db()
+        logs = list(db.audit_logs.find().sort('timestamp', -1).limit(100))
+        for log in logs:
+            log['_id'] = str(log['_id'])
+        return render_template('admin/audit.html', logs=logs, title=trans('admin_audit_title', default='Audit Logs'))
+    except Exception as e:
+        logger.error(f"Error fetching audit logs for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('admin/audit.html', logs=[])
+
+@admin_bp.route('/debtors', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_debtors():
+    """Manage debtors: list all and add new ones."""
+    db = utils.get_mongo_db()
+    form = DebtorForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        try:
+            debtor = {
+                'name': form.name.data,
+                'amount': form.amount.data,
+                'due_date': form.due_date.data,
+                'created_by': current_user.id,
+                'created_at': datetime.datetime.utcnow()
+            }
+            result = db.debtors.insert_one(debtor)
+            debtor_id = str(result.inserted_id)
+            logger.info(f"Debtor added: id={debtor_id}, name={form.name.data}, user={current_user.id}",
+                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            log_audit_action('add_debtor', {'debtor_id': debtor_id, 'name': form.name.data})
+            flash(trans('debtor_added', default='Debtor added successfully'), 'success')
+            return redirect(url_for('admin.manage_debtors'))
+        except Exception as e:
+            logger.error(f"Error adding debtor: {str(e)}",
+                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+            return render_template('admin/debtors.html', form=form, debtors=[])
+    
+    debtors = list(db.debtors.find().sort('created_at', -1))
+    for debtor in debtors:
+        debtor['_id'] = str(debtor['_id'])
+    return render_template('admin/debtors.html', form=form, debtors=debtors, title=trans('admin_debtors_title', default='Manage Debtors'))
+
+@admin_bp.route('/creditors', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_creditors():
+    """Manage creditors: list all and add new ones."""
+    db = utils.get_mongo_db()
+    form = CreditorForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        try:
+            creditor = {
+                'name': form.name.data,
+                'amount': form.amount.data,
+                'due_date': form.due_date.data,
+                'created_by': current_user.id,
+                'created_at': datetime.datetime.utcnow()
+            }
+            result = db.creditors.insert_one(creditor)
+            creditor_id = str(result.inserted_id)
+            logger.info(f"Creditor added: id={creditor_id}, name={form.name.data}, user={current_user.id}",
+                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            log_audit_action('add_creditor', {'creditor_id': creditor_id, 'name': form.name.data})
+            flash(trans('creditor_added', default='Creditor added successfully'), 'success')
+            return redirect(url_for('admin.manage_creditors'))
+        except Exception as e:
+            logger.error(f"Error adding creditor: {str(e)}",
+                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+            return render_template('admin/creditors.html', form=form, creditors=[])
+    
+    creditors = list(db.creditors.find().sort('created_at', -1))
+    for creditor in creditors:
+        creditor['_id'] = str(creditor['_id'])
+    return render_template('admin/creditors.html', form=form, creditors=creditors, title=trans('admin_creditors_title', default='Manage Creditors'))
+
+@admin_bp.route('/records', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_records():
+    """View all income/receipt records."""
+    try:
+        db = utils.get_mongo_db()
+        records = list(get_records(db, {}).sort('created_at', -1))
+        for record in records:
+            record['_id'] = str(record['_id'])
+        return render_template('admin/records.html', records=records, title=trans('admin_records_title', default='Manage Income Records'))
+    except Exception as e:
+        logger.error(f"Error fetching records for admin: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('admin/records.html', records=[]), 500
+
+@admin_bp.route('/cashflows', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_cashflows():
+    """View all payment outflow records."""
+    try:
+        db = utils.get_mongo_db()
+        cashflows = list(get_cashflows(db, {}).sort('created_at', -1))
+        for cashflow in cashflows:
+            cashflow['_id'] = str(cashflow['_id'])
+        return render_template('admin/cashflows.html', cashflows=cashflows, title=trans('admin_cashflows_title', default='Manage Payment Outflows'))
+    except Exception as e:
+        logger.error(f"Error fetching cashflows for admin: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('admin/cashflows.html', cashflows=[]), 500
+
+@admin_bp.route('/funds', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_funds():
+    """Manage funding records: list all and add new ones."""
+    db = utils.get_mongo_db()
+    form = FundForm()
+    if request.method == 'POST' and form.validate_on_submit():
+        try:
+            fund = {
+                'source': form.source.data,
+                'amount': form.amount.data,
+                'received_date': form.received_date.data,
+                'created_by': current_user.id,
+                'created_at': datetime.datetime.utcnow()
+            }
+            result = db.funds.insert_one(fund)
+            fund_id = str(result.inserted_id)
+            logger.info(f"Fund added: id={fund_id}, source={form.source.data}, user={current_user.id}",
+                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            log_audit_action('add_fund', {'fund_id': fund_id, 'source': form.source.data})
+            flash(trans('fund_added', default='Fund added successfully'), 'success')
+            return redirect(url_for('admin.manage_funds'))
+        except Exception as e:
+            logger.error(f"Error adding fund: {str(e)}",
+                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+            return render_template('admin/funds.html', form=form, funds=[])
+    
+    funds = list(db.funds.find().sort('created_at', -1))
+    for fund in funds:
+        fund['_id'] = str(fund['_id'])
+    return render_template('admin/funds.html', form=form, funds=funds, title=trans('admin_funds_title', default='Manage Funds'))
+
 @admin_bp.route('/reports/customers', methods=['GET'])
 @login_required
 @utils.requires_role('admin')
@@ -622,6 +479,59 @@ def customer_reports():
     
     return render_template('admin/customer_reports.html', users=users, title=trans('admin_customer_reports_title', default='Customer Reports'))
 
+@admin_bp.route('/reports/investors', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def investor_reports():
+    """Generate investor reports summarizing financial health."""
+    db = utils.get_mongo_db()
+    format = request.args.get('format', 'html')
+    funds = list(db.funds.find())
+    total_funds = sum(fund['amount'] for fund in funds)
+    debtors = list(db.debtors.find())
+    total_debtors = sum(debtor['amount'] for debtor in debtors)
+    creditors = list(db.creditors.find())
+    total_creditors = sum(creditor['amount'] for creditor in creditors)
+    report_data = {
+        'total_funds': total_funds,
+        'total_debtors': total_debtors,
+        'total_creditors': total_creditors,
+        'net_position': total_funds - total_creditors
+    }
+    if format == 'pdf':
+        return generate_investor_report_pdf(report_data)
+    elif format == 'csv':
+        return generate_investor_report_csv(report_data)
+    
+    return render_template('admin/investor_reports.html', report_data=report_data, title=trans('admin_investor_reports_title', default='Investor Reports'))
+
+@admin_bp.route('/forecasts', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_forecasts():
+    """View basic financial forecasts."""
+    try:
+        db = utils.get_mongo_db()
+        records = list(get_records(db, {}))
+        cashflows = list(get_cashflows(db, {}))
+        total_income = sum(record['amount'] for record in records if record['type'] == 'income')
+        total_expenses = sum(cashflow['amount'] for cashflow in cashflows if cashflow['type'] == 'expense')
+        forecast = {
+            'total_income': total_income,
+            'total_expenses': total_expenses,
+            'net_cashflow': total_income - total_expenses,
+            'projected_income': total_income * 1.1,  # Simple 10% growth assumption
+            'projected_expenses': total_expenses * 1.1
+        }
+        return render_template('admin/forecasts.html', forecast=forecast, title=trans('admin_forecasts_title', default='Financial Forecasts'))
+    except Exception as e:
+        logger.error(f"Error generating forecasts for admin: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('admin/forecasts.html', forecast={}), 500
+
 def generate_customer_report_pdf(users):
     """Generate a PDF report of customer data."""
     buffer = BytesIO()
@@ -633,16 +543,14 @@ def generate_customer_report_pdf(users):
     p.drawString(1 * inch, y, trans('admin_username', default='Username'))
     p.drawString(2.5 * inch, y, trans('admin_email', default='Email'))
     p.drawString(4 * inch, y, trans('user_role', default='Role'))
-    p.drawString(5.5 * inch, y, trans('admin_created_at', default='Created At'))
-    p.drawString(7 * inch, y, trans('subscription_status', default='Subscription Status'))
+    p.drawString(5.5 * inch, y, trans('subscription_status', default='Subscription Status'))
     y -= 0.3 * inch
     for user in users:
-        status = 'Subscribed' if user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow()) else 'Trial' if user.get('is_trial') and datetime.datetime.utcnow() <= user.get('trial_end') else 'Expired'
+        status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
         p.drawString(1 * inch, y, user['_id'])
         p.drawString(2.5 * inch, y, user['email'])
         p.drawString(4 * inch, y, user['role'])
-        p.drawString(5.5 * inch, y, user['created_at'].strftime('%Y-%m-%d'))
-        p.drawString(7 * inch, y, status)
+        p.drawString(5.5 * inch, y, status)
         y -= 0.3 * inch
         if y < 1 * inch:
             p.showPage()
@@ -654,12 +562,50 @@ def generate_customer_report_pdf(users):
 
 def generate_customer_report_csv(users):
     """Generate a CSV report of customer data."""
-    output = [[trans('admin_username', default='Username'), trans('admin_email', default='Email'), trans('user_role', default='Role'), trans('admin_created_at', default='Created At'), trans('subscription_status', default='Subscription Status')]]
+    output = [[trans('admin_username', default='Username'), trans('admin_email', default='Email'), trans('user_role', default='Role'), trans('subscription_status', default='Subscription Status')]]
     for user in users:
-        status = 'Subscribed' if user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow()) else 'Trial' if user.get('is_trial') and datetime.datetime.utcnow() <= user.get('trial_end') else 'Expired'
-        output.append([user['_id'], user['email'], user['role'], user['created_at'].strftime('%Y-%m-%d'), status])
+        status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
+        output.append([user['_id'], user['email'], user['role'], status])
     buffer = BytesIO()
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
     return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=customer_report.csv'})
+
+def generate_investor_report_pdf(report_data):
+    """Generate a PDF report for investors."""
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    p.setFont("Helvetica", 12)
+    p.drawString(1 * inch, 10.5 * inch, trans('admin_investor_report_title', default='Investor Report'))
+    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.datetime.utcnow().strftime('%Y-%m-%d')}")
+    y = 9.5 * inch
+    p.drawString(1 * inch, y, trans('fund_total', default='Total Funds'))
+    p.drawString(3 * inch, y, f"₦{report_data['total_funds']:.2f}")
+    y -= 0.3 * inch
+    p.drawString(1 * inch, y, trans('debtor_total', default='Total Debtors'))
+    p.drawString(3 * inch, y, f"₦{report_data['total_debtors']:.2f}")
+    y -= 0.3 * inch
+    p.drawString(1 * inch, y, trans('creditor_total', default='Total Creditors'))
+    p.drawString(3 * inch, y, f"₦{report_data['total_creditors']:.2f}")
+    y -= 0.3 * inch
+    p.drawString(1 * inch, y, trans('net_position', default='Net Position'))
+    p.drawString(3 * inch, y, f"₦{report_data['net_position']:.2f}")
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=investor_report.pdf'})
+
+def generate_investor_report_csv(report_data):
+    """Generate a CSV report for investors."""
+    output = [
+        [trans('fund_total', default='Total Funds'), f"₦{report_data['total_funds']:.2f}"],
+        [trans('debtor_total', default='Total Debtors'), f"₦{report_data['total_debtors']:.2f}"],
+        [trans('creditor_total', default='Total Creditors'), f"₦{report_data['total_creditors']:.2f}"],
+        [trans('net_position', default='Net Position'), f"₦{report_data['net_position']:.2f}"]
+    ]
+    buffer = BytesIO()
+    writer = csv.writer(buffer, lineterminator='\n')
+    writer.writerows(output)
+    buffer.seek(0)
+    return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=investor_report.csv'})
