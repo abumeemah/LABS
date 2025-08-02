@@ -8,6 +8,7 @@ from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, Dupli
 from functools import lru_cache
 from translations import trans
 from utils import get_mongo_db, logger
+import time
 
 # Configure logger for the application
 logger = logging.getLogger('business_finance_app')
@@ -30,7 +31,7 @@ def get_db():
 
 def initialize_app_data(app):
     """
-    Initialize MongoDB collections and indexes for business finance modules.
+    Initialize MongoDB collections, indexes, and perform one-off migrations for business finance modules.
     
     Args:
         app: Flask application instance
@@ -58,6 +59,28 @@ def initialize_app_data(app):
             logger.info(f"MongoDB database: {db_instance.name}", extra={'session_id': 'no-session-id'})
             collections = db_instance.list_collection_names()
             
+            # Drop unused collections (one-off migration)
+            unused_collections = [
+                'bills', 'bill_reminders', 'budgets', 'shopping_items', 'shopping_lists',
+                'feedback', 'tool_usage', 'credit_requests', 'ficore_credit_transactions', 'agents'
+            ]
+            migration_flag = db_instance.system_config.find_one({'_id': 'migration_unused_collections_dropped'})
+            if not migration_flag or not migration_flag.get('value'):
+                for collection in unused_collections:
+                    if collection in collections:
+                        db_instance[collection].drop()
+                        logger.info(f"Dropped unused collection: {collection}", extra={'session_id': 'no-session-id'})
+                    else:
+                        logger.info(f"Collection {collection} does not exist, skipping.", extra={'session_id': 'no-session-id'})
+                db_instance.system_config.update_one(
+                    {'_id': 'migration_unused_collections_dropped'},
+                    {'$set': {'value': True}},
+                    upsert=True
+                )
+                logger.info("Marked unused collections drop as completed in system_config", extra={'session_id': 'no-session-id'})
+            else:
+                logger.info("Unused collections already dropped, skipping.", extra={'session_id': 'no-session-id'})
+            
             # Define collection schemas for core business finance modules
             collection_schemas = {
                 'users': {
@@ -74,6 +97,9 @@ def initialize_app_data(app):
                                 'trial_start': {'bsonType': 'date'},
                                 'trial_end': {'bsonType': 'date'},
                                 'is_subscribed': {'bsonType': 'bool'},
+                                'subscription_plan': {'bsonType': ['string', 'null'], 'enum': [None, 'monthly', 'yearly']},
+                                'subscription_start': {'bsonType': ['date', 'null']},
+                                'subscription_end': {'bsonType': ['date', 'null']},
                                 'language': {'enum': ['en', 'ha']},
                                 'created_at': {'bsonType': 'date'},
                                 'display_name': {'bsonType': ['string', 'null']},
@@ -91,9 +117,6 @@ def initialize_app_data(app):
                                         'industry': {'bsonType': 'string'},
                                         'products_services': {'bsonType': 'string'},
                                         'phone_number': {'bsonType': 'string'}
-                                'subscription_plan': {'bsonType': ['string', 'null'], 'enum': [None, 'monthly', 'yearly']},
-                                'subscription_start': {'bsonType': ['date', 'null']},
-                                'subscription_end': {'bsonType': ['date', 'null']}
                                     }
                                 }
                             }
@@ -270,7 +293,7 @@ def initialize_app_data(app):
                                             exc_info=True, extra={'session_id': 'no-session-id'})
                                 raise
             
-            # Fix existing user documents to include trial and subscription fields
+            # Fix existing user documents to include trial and subscription fields (one-off migration)
             if 'users' in collections:
                 try:
                     fix_flag = db_instance.system_config.find_one({'_id': 'user_fixes_applied'})
@@ -283,7 +306,10 @@ def initialize_app_data(app):
                                 {'is_trial': {'$exists': False}},
                                 {'trial_start': {'$exists': False}},
                                 {'trial_end': {'$exists': False}},
-                                {'is_subscribed': {'$exists': False}}
+                                {'is_subscribed': {'$exists': False}},
+                                {'subscription_plan': {'$exists': False}},
+                                {'subscription_start': {'$exists': False}},
+                                {'subscription_end': {'$exists': False}}
                             ]
                         })
                         for user in users_to_fix:
@@ -326,8 +352,11 @@ def initialize_app_data(app):
                                 updates['trial_start'] = datetime.utcnow()
                                 updates['trial_end'] = datetime.utcnow() + timedelta(days=30)
                                 updates['is_subscribed'] = False
+                                updates['subscription_plan'] = None
+                                updates['subscription_start'] = None
+                                updates['subscription_end'] = None
                                 logger.info(
-                                    f"Initialized trial fields for user {user['_id']}",
+                                    f"Initialized trial and subscription fields for user {user['_id']}",
                                     extra={'session_id': 'no-session-id'}
                                 )
                             if updates:
@@ -352,7 +381,9 @@ def initialize_app_data(app):
             raise
 
 class User:
-    def __init__(self, id, email, display_name=None, role='trader', is_admin=False, setup_complete=False, language='en', is_trial=True, trial_start=None, trial_end=None, is_subscribed=False):
+    def __init__(self, id, email, display_name=None, role='trader', is_admin=False, setup_complete=False, language='en', 
+                 is_trial=True, trial_start=None, trial_end=None, is_subscribed=False, 
+                 subscription_plan=None, subscription_start=None, subscription_end=None):
         self.id = id
         self.email = email
         self.username = display_name or email.split('@')[0]
@@ -365,6 +396,9 @@ class User:
         self.trial_start = trial_start or datetime.utcnow()
         self.trial_end = trial_end or (datetime.utcnow() + timedelta(days=30))
         self.is_subscribed = is_subscribed
+        self.subscription_plan = subscription_plan
+        self.subscription_start = subscription_start
+        self.subscription_end = subscription_end
 
     @property
     def is_authenticated(self):
@@ -386,20 +420,20 @@ class User:
 
     def is_trial_active(self):
         """
-        Check if the user's trial is active.
+        Check if the user's trial or subscription is active.
         
         Returns:
-            bool: True if trial is active or user is subscribed, False otherwise
+            bool: True if trial or subscription is active, False otherwise
         """
-        if self.is_subscribed:
-            return True
+        if self.is_subscribed and self.subscription_end:
+            return datetime.utcnow() <= self.subscription_end
         if self.is_trial and self.trial_end:
             return datetime.utcnow() <= self.trial_end
         return False
 
 def create_user(db, user_data):
     """
-    Create a new user in the users collection with trial settings.
+    Create a new user in the users collection with trial and subscription settings.
     
     Args:
         db: MongoDB database instance
@@ -427,6 +461,9 @@ def create_user(db, user_data):
             'trial_start': datetime.utcnow(),
             'trial_end': datetime.utcnow() + timedelta(days=30),
             'is_subscribed': False,
+            'subscription_plan': None,
+            'subscription_start': None,
+            'subscription_end': None,
             'created_at': datetime.utcnow(),
             'business_details': user_data.get('business_details')
         }
@@ -450,7 +487,10 @@ def create_user(db, user_data):
             is_trial=user_doc['is_trial'],
             trial_start=user_doc['trial_start'],
             trial_end=user_doc['trial_end'],
-            is_subscribed=user_doc['is_subscribed']
+            is_subscribed=user_doc['is_subscribed'],
+            subscription_plan=user_doc['subscription_plan'],
+            subscription_start=user_doc['subscription_start'],
+            subscription_end=user_doc['subscription_end']
         )
     except Exception as e:
         logger.error(f"Error creating user: {str(e)}", 
@@ -483,7 +523,10 @@ def get_user_by_email(db, email):
                 is_trial=user_doc.get('is_trial', True),
                 trial_start=user_doc.get('trial_start'),
                 trial_end=user_doc.get('trial_end'),
-                is_subscribed=user_doc.get('is_subscribed', False)
+                is_subscribed=user_doc.get('is_subscribed', False),
+                subscription_plan=user_doc.get('subscription_plan'),
+                subscription_start=user_doc.get('subscription_start'),
+                subscription_end=user_doc.get('subscription_end')
             )
         return None
     except Exception as e:
@@ -517,7 +560,10 @@ def get_user(db, user_id):
                 is_trial=user_doc.get('is_trial', True),
                 trial_start=user_doc.get('trial_start'),
                 trial_end=user_doc.get('trial_end'),
-                is_subscribed=user_doc.get('is_subscribed', False)
+                is_subscribed=user_doc.get('is_subscribed', False),
+                subscription_plan=user_doc.get('subscription_plan'),
+                subscription_start=user_doc.get('subscription_start'),
+                subscription_end=user_doc.get('subscription_end')
             )
         return None
     except Exception as e:
@@ -768,7 +814,10 @@ def to_dict_user(user):
         'is_trial': user.is_trial,
         'trial_start': user.trial_start,
         'trial_end': user.trial_end,
-        'is_subscribed': user.is_subscribed
+        'is_subscribed': user.is_subscribed,
+        'subscription_plan': user.subscription_plan,
+        'subscription_start': user.subscription_start,
+        'subscription_end': user.subscription_end
     }
 
 def to_dict_record(record):
