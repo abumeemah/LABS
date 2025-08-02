@@ -39,7 +39,6 @@ try:
     from .startup.funds_translations import FUNDS_TRANSLATIONS
     from .startup.investor_reports_translations import INVESTOR_REPORTS_TRANSLATIONS
     from .startup.forecasts_translations import FORECASTS_TRANSLATIONS
-    from .admin_translations import ADMIN_TRANSLATIONS
     
     # General Features
     from .general_features.general_translations import GENERAL_TRANSLATIONS
