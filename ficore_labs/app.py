@@ -20,37 +20,10 @@ from flask_babel import Babel
 from flask_compress import Compress
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from utils import get_mongo_db, logger, initialize_tools_with_urls
 
 # Load environment variables
 load_dotenv()
-
-# Set up logging
-root_logger = logging.getLogger('bizcore_app')
-root_logger.setLevel(logging.INFO)
-
-class SessionFormatter(logging.Formatter):
-    def format(self, record):
-        record.session_id = getattr(record, 'session_id', 'no-session-id')
-        record.user_role = getattr(record, 'user_role', 'anonymous')
-        record.ip_address = getattr(record, 'ip_address', 'unknown')
-        return super().format(record)
-
-class SessionAdapter(logging.LoggerAdapter):
-    def process(self, msg, kwargs):
-        kwargs['extra'] = kwargs.get('extra', {})
-        session_id = 'no-session-id'
-        user_role = 'anonymous'
-        ip_address = 'unknown'
-        if has_request_context():
-            session_id = session.get('sid', 'no-session-id')
-            user_role = current_user.role if current_user.is_authenticated else 'anonymous'
-            ip_address = request.remote_addr
-        kwargs['extra']['session_id'] = session_id
-        kwargs['extra']['user_role'] = user_role
-        kwargs['extra']['ip_address'] = ip_address
-        return msg, kwargs
-
-logger = SessionAdapter(root_logger, {})
 
 # Initialize extensions
 login_manager = LoginManager()
@@ -77,10 +50,13 @@ def admin_required(f):
 def custom_login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if current_user.is_authenticated:
-            return f(*args, **kwargs)
-        logger.info("Redirecting unauthenticated user to login")
-        return redirect(url_for('users.login', next=request.url))
+        if not current_user.is_authenticated:
+            logger.info("Redirecting unauthenticated user to login")
+            return redirect(url_for('users.login', next=request.url))
+        if not current_user.is_trial_active():
+            logger.info(f"User {current_user.id} trial expired, redirecting to subscription")
+            return redirect(url_for('subscribe.subscription_required'))
+        return f(*args, **kwargs)
     return decorated_function
 
 def ensure_session_id(f):
@@ -94,7 +70,8 @@ def ensure_session_id(f):
                 logger.info(f'New session ID generated: {session["sid"]}')
             else:
                 session_id = session.get('sid')
-                mongo_session = current_app.extensions['mongo']['bizdb']['sessions'].find_one({'_id': session_id})
+                db = get_mongo_db()
+                mongo_session = db.sessions.find_one({'_id': session_id})
                 if not mongo_session and current_user.is_authenticated:
                     logger.info(f'Invalid session {session_id} for user {current_user.id}, logging out')
                     logout_user()
@@ -134,7 +111,8 @@ def ensure_session_id(f):
 def setup_logging(app):
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.INFO)
-    handler.setFormatter(SessionFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s [session: %(session_id)s, role: %(user_role)s, ip: %(ip_address)s]'))
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s [session: %(session_id)s, role: %(user_role)s, ip: %(ip_address)s]'))
+    root_logger = logging.getLogger('bizcore_app')
     root_logger.handlers = []
     root_logger.addHandler(handler)
     flask_logger = logging.getLogger('flask')
@@ -191,11 +169,15 @@ def setup_session(app):
         logger.info('Session configured with filesystem fallback')
 
 class User(UserMixin):
-    def __init__(self, id, email, display_name=None, role='trader'):
+    def __init__(self, id, email, display_name=None, role='trader', is_trial=True, trial_start=None, trial_end=None, is_subscribed=False):
         self.id = id
         self.email = email
         self.display_name = display_name or id
-        self.role = role  # trader, startup, admin
+        self.role = role
+        self.is_trial = is_trial
+        self.trial_start = trial_start or datetime.utcnow()
+        self.trial_end = trial_end or (datetime.utcnow() + timedelta(days=30))
+        self.is_subscribed = is_subscribed
 
     def get(self, key, default=None):
         try:
@@ -218,6 +200,13 @@ class User(UserMixin):
 
     def get_id(self):
         return str(self.id)
+
+    def is_trial_active(self):
+        if self.is_subscribed:
+            return True
+        if self.is_trial and self.trial_end:
+            return datetime.utcnow() <= self.trial_end
+        return False
 
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
@@ -273,7 +262,11 @@ def create_app():
                     id=user['_id'],
                     email=user['email'],
                     display_name=user.get('display_name', user['_id']),
-                    role=user.get('role', 'trader')
+                    role=user.get('role', 'trader'),
+                    is_trial=user.get('is_trial', True),
+                    trial_start=user.get('trial_start'),
+                    trial_end=user.get('trial_end'),
+                    is_subscribed=user.get('is_subscribed', False)
                 )
         except Exception as e:
             logger.error(f"Error loading user {user_id}: {str(e)}")
@@ -282,52 +275,15 @@ def create_app():
     # Initialize database
     try:
         with app.app_context():
-            db = app.extensions['mongo']['bizdb']
-            collections = [
-                'users', 'debtors', 'creditors', 'receipts', 
-                'payments', 'reports', 'funds', 'forecasts', 'investor_reports'
-            ]
-            for collection_name in collections:
-                if collection_name not in db.list_collection_names():
-                    db.create_collection(collection_name)
-                    logger.info(f'Created collection: {collection_name}')
-
-            # Create indexes
-            db.debtors.create_index([('user_id', 1), ('created_at', -1)])
-            db.creditors.create_index([('user_id', 1), ('created_at', -1)])
-            db.receipts.create_index([('user_id', 1), ('created_at', -1)])
-            db.payments.create_index([('user_id', 1), ('created_at', -1)])
-            db.funds.create_index([('user_id', 1), ('created_at', -1)])
-            db.forecasts.create_index([('user_id', 1), ('created_at', -1)])
-            db.investor_reports.create_index([('user_id', 1), ('created_at', -1)])
-            logger.info('Created indexes for collections')
-
-            # Setup admin user
-            admin_email = os.getenv('ADMIN_EMAIL', 'ficoreafrica@gmail.com')
-            admin_password = os.getenv('ADMIN_PASSWORD')
-            if not admin_password:
-                logger.error('ADMIN_PASSWORD environment variable is not set')
-                raise ValueError('ADMIN_PASSWORD must be set')
-            admin_user = db.users.find_one({'email': admin_email})
-            if not admin_user:
-                user_data = {
-                    '_id': 'admin',
-                    'email': admin_email.lower(),
-                    'password_hash': generate_password_hash(admin_password),
-                    'role': 'admin',
-                    'created_at': datetime.utcnow(),
-                    'lang': 'en',
-                    'is_active': True,
-                    'display_name': 'Admin'
-                }
-                db.users.insert_one(user_data)
-                logger.info(f'Admin user created with email: {admin_email}')
-            else:
-                logger.info(f'Admin user already exists with email: {admin_email}')
-
+            from database import initialize_app_data
+            initialize_app_data(app)
+            logger.info('Database initialized successfully')
     except Exception as e:
-        logger.error(f'Error in create_app initialization: {str(e)}')
+        logger.error(f'Error in database initialization: {str(e)}')
         raise
+
+    # Initialize tools and navigation
+    initialize_tools_with_urls(app)
 
     # Register blueprints
     from users.routes import users_bp
@@ -340,7 +296,7 @@ def create_app():
     from funds.routes import funds_bp
     from forecasts.routes import forecasts_bp
     from investor_reports.routes import investor_reports_bp
-    from subscribe_bp import subscribe_bp
+    from subscribe.routes import subscribe_bp
 
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(debtors_bp, url_prefix='/debtors')
@@ -351,8 +307,8 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(funds_bp, url_prefix='/funds')
     app.register_blueprint(forecasts_bp, url_prefix='/forecasts')
-    app.register_blueprint(subscribe_bp)
     app.register_blueprint(investor_reports_bp, url_prefix='/investor-reports')
+    app.register_blueprint(subscribe_bp, url_prefix='/subscribe')
     logger.info('Registered core business finance blueprints')
 
     # Template filters and context processors
@@ -415,18 +371,21 @@ def create_app():
             status['details'] = str(e)
             return jsonify(status), 500
 
-    @app.route('/static/<path:filename>')
-    def static_files(filename):
-        if '..' in filename or filename.startswith('/'):
-            logger.warning(f'Invalid static path: {filename}')
-            abort(404)
+    @app.route('/view-data')
+    @login_required
+    def view_data():
         try:
-            response = send_from_directory('static', filename)
-            response.headers['Cache-Control'] = 'public, max-age=3600'
-            return response
-        except FileNotFoundError:
-            logger.error(f'Static file not found: {filename}')
-            abort(404)
+            db = get_mongo_db()
+            records = db.records.find({'user_id': current_user.id})
+            cashflows = db.cashflows.find({'user_id': current_user.id})
+            return render_template('view_data.html', 
+                                 records=list(records), 
+                                 cashflows=list(cashflows),
+                                 is_trial_active=current_user.is_trial_active())
+        except Exception as e:
+            logger.error(f'Error fetching data for user {current_user.id}: {str(e)}')
+            flash('Error fetching your data.', 'danger')
+            return redirect(url_for('index'))
 
     @app.errorhandler(404)
     def page_not_found(e):
@@ -440,7 +399,7 @@ def create_app():
 
     @app.before_request
     def check_session_timeout():
-        if request.path.startswith('/static/'):
+        if request.path.startswith('/static/') or request.path == url_for('subscribe.subscription_required'):
             return
         if current_user.is_authenticated and 'last_activity' in session:
             last_activity = session.get('last_activity')
@@ -457,7 +416,7 @@ def create_app():
                 logout_user()
                 if current_app.config.get('SESSION_TYPE') == 'mongodb':
                     try:
-                        db = current_app.extensions['mongo']['bizdb']
+                        db = get_mongo_db()
                         db.sessions.delete_one({'_id': sid})
                     except Exception as e:
                         logger.error(f"Failed to delete MongoDB session {sid}: {str(e)}")
