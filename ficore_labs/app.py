@@ -340,6 +340,7 @@ def create_app():
     from funds.routes import funds_bp
     from forecasts.routes import forecasts_bp
     from investor_reports.routes import investor_reports_bp
+    from subscribe_bp import subscribe_bp
 
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(debtors_bp, url_prefix='/debtors')
@@ -350,6 +351,7 @@ def create_app():
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(funds_bp, url_prefix='/funds')
     app.register_blueprint(forecasts_bp, url_prefix='/forecasts')
+    app.register_blueprint(subscribe_bp)
     app.register_blueprint(investor_reports_bp, url_prefix='/investor-reports')
     logger.info('Registered core business finance blueprints')
 
