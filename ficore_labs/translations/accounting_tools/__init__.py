@@ -1,1 +1,0 @@
-# Accounting Tools Translation Module
