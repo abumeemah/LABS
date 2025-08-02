@@ -306,6 +306,7 @@ def create_app():
     from receipts.routes import receipts_bp
     from reports.routes import reports_bp
     from admin.routes import admin_bp
+    from dashboard import dashboard_bp
     from general.routes import general_bp
     from business.routes import business
     from funds.routes import funds_bp
@@ -326,6 +327,7 @@ def create_app():
     app.register_blueprint(subscribe_bp, url_prefix='/subscribe')
     app.register_blueprint(general_bp, url_prefix='/general')
     app.register_blueprint(business, url_prefix='/business')
+    app.register_blueprint(dashboard_bp, url_prefix='/dashboard'))
     logger.info('Registered core business finance blueprints')
 
     # Initialize tools and navigation after blueprints
