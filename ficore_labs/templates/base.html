@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="{{ lang | e }}">
+<html lang="{{ current_lang | default('en') | e }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{{ t('general_app_description', default='FiCore Africa: Empowering financial growth across Africa') | e }}">
-    <meta name="keywords" content="{% if current_user.is_authenticated and current_user.role == 'personal' %}personal finance, budgeting, savings, ficore credits, financial planning, Africa{% else %}business finance, inventory management, ficore credits, debtors, creditors, Africa{% endif %}">
-    <meta name="author" content="FiCore">
+    <meta name="description" content="{{ t('general_app_description', default='Business Finance: Empowering financial growth for traders and startups') | e }}">
+    <meta name="keywords" content="business finance, inventory management, debtors, creditors, forecasts, funds, investor reports, Africa">
+    <meta name="author" content="Business Finance">
     <meta name="csrf-token" content="{{ csrf_token() | e }}">
     <meta name="robots" content="index, follow">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>{% block title %}{{ t('general_ficore_africa', default='FiCore Africa') | e }}{% endblock %}</title>
+    <title>{% block title %}{{ t('general_app_title', default='Business Finance') | e }}{% endblock %}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.min.css') | e }}">
@@ -29,14 +29,14 @@
     <header class="fintech-top-header">
         <div class="header-left">
             {% if current_user.is_authenticated %}
-                <a class="profile-link" href="{{ url_for('personal.index') if current_user.role == 'personal' else url_for('general_bp.home') | e }}" aria-label="{{ t('general_ficore_africa', default='FiCore Africa') | e }}">
+                <a class="profile-link" href="{{ url_for('dashboard.index') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
                     <img src="{{ current_user.profile_picture if current_user.profile_picture else url_for('static', filename='img/default_profile.png') | e }}" alt="{{ t('general_user_profile_picture', default='User Profile Picture') | e }}" class="profile-avatar">
                     <span class="greeting-text">{{ t('general_hi_user', default='Hi') | e }}, {{ current_user.display_name | default(current_user.id) | e }}</span>
                 </a>
             {% else %}
-                <a class="navbar-brand" href="{{ url_for('personal.index') if request.blueprint == 'personal' else url_for('general_bp.home') | e }}" aria-label="{{ t('general_ficore_africa', default='FiCore Africa') | e }}">
-                    <img src="{{ url_for('static', filename='img/ficore_logo.png') | e }}" alt="{{ t('general_ficore_africa_logo', default='FiCore Africa Logo') | e }}" class="ficore-logo">
-                    <span class="brand-text">{{ t('general_ficore_africa', default='FiCore Africa') | e }}</span>
+                <a class="navbar-brand" href="{{ url_for('index') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
+                    <img src="{{ url_for('static', filename='img/logo.png') | e }}" alt="{{ t('general_app_logo', default='Business Finance Logo') | e }}" class="app-logo">
+                    <span class="brand-text">{{ t('general_app_title', default='Business Finance') | e }}</span>
                 </a>
             {% endif %}
         </div>
@@ -47,19 +47,20 @@
             </button>
             <button class="icon-btn language-toggle" id="languageToggle" onclick="toggleLanguage()" data-bs-toggle="tooltip" data-bs-title="{{ t('general_language_toggle_tooltip', default='Toggle language') | e }}" aria-label="{{ t('general_language_toggle', default='Toggle language') | e }}">
                 <i class="bi bi-globe"></i>
-                <span id="languageText">{{ 'ENGLISH' if lang == 'en' else 'HAUSA' }}</span>
+                <span id="languageText">{{ 'ENGLISH' if current_lang == 'en' else 'HAUSA' }}</span>
             </button>
             <button class="icon-btn" id="darkModeToggle" onclick="toggleDarkMode()" data-bs-toggle="tooltip" data-bs-title="{{ t('general_mode_toggle_tooltip_switch_to_dark', default='Switch to dark mode') | e }}" aria-label="{{ t('general_mode_toggle_dark', default='Toggle dark mode') | e }}">
                 <i class="bi bi-moon-stars"></i>
             </button>
-            <button class="icon-btn notification-bell" id="notificationBell" data-bs-toggle="modal" data-bs-target="#notificationModal" data-bs-toggle="tooltip" data-bs-title="{{ t('general_notifications_tooltip', default='View notifications') | e }}" aria-label="{{ t('general_notifications', default='Notifications') | e }}">
-                <i class="bi bi-bell"></i>
-                <span class="notification-badge badge bg-danger rounded-circle d-none" id="notificationBadge">0</span>
-            </button>
+            {% if current_user.is_authenticated %}
+                <button class="icon-btn notification-bell" id="notificationBell" data-bs-toggle="modal" data-bs-target="#notificationModal" data-bs-toggle="tooltip" data-bs-title="{{ t('general_notifications_tooltip', default='View notifications') | e }}" aria-label="{{ t('general_notifications', default='Notifications') | e }}">
+                    <i class="bi bi-bell"></i>
+                    <span class="notification-badge badge bg-danger rounded-circle d-none" id="notificationBadge">0</span>
+                </button>
+            {% endif %}
         </div>
     </header>
 
-    {# Original navbar for unauthenticated users #}
     {% if not current_user.is_authenticated %}
         <nav class="navbar navbar-expand-lg bg-light">
             <div class="container-fluid">
@@ -69,10 +70,10 @@
                 <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                     <ul class="navbar-nav">
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == ('personal.index' if request.blueprint == 'personal' else 'general_bp.home') %}active{% endif %}" href="{{ url_for('personal.index') if request.blueprint == 'personal' else url_for('general_bp.home') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_home_tooltip', default='Go to homepage') | e }}" aria-current="{% if request.endpoint == ('personal.index' if request.blueprint == 'personal' else 'general_bp.home') %}page{% endif %}">{{ t('general_home', default='Home') | e }}</a>
+                            <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_home_tooltip', default='Go to homepage') | e }}" aria-current="{% if request.endpoint == 'index' %}page{% endif %}">{{ t('general_home', default='Home') | e }}</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'general_bp.about' %}active{% endif %}" href="{{ url_for('general_bp.about') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_about_tooltip', default='Learn more about FiCore') | e }}" aria-current="{% if request.endpoint == 'general_bp.about' %}page{% endif %}">{{ t('general_about', default='About') | e }}</a>
+                            <a class="nav-link {% if request.endpoint == 'general_bp.about' %}active{% endif %}" href="{{ url_for('general_bp.about') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_about_tooltip', default='Learn more about us') | e }}" aria-current="{% if request.endpoint == 'general_bp.about' %}page{% endif %}">{{ t('general_about', default='About') | e }}</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {% if request.endpoint == 'general_bp.contact' %}active{% endif %}" href="{{ url_for('general_bp.contact') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_contact_tooltip', default='Get in touch') | e }}" aria-current="{% if request.endpoint == 'general_bp.contact' %}page{% endif %}">{{ t('general_contact', default='Contact') | e }}</a>
@@ -86,13 +87,50 @@
                         <li class="nav-item">
                             <button class="nav-link btn btn-link language-toggle" id="navLanguageToggle" onclick="toggleLanguage()" data-bs-toggle="tooltip" data-bs-title="{{ t('general_language_toggle_tooltip', default='Toggle language') | e }}" aria-label="{{ t('general_language_toggle', default='Toggle language') | e }}">
                                 <i class="bi bi-globe"></i>
-                                <span id="navLanguageText">{{ 'ENGLISH' if lang == 'en' else 'HAUSA' }}</span>
+                                <span id="navLanguageText">{{ 'ENGLISH' if current_lang == 'en' else 'HAUSA' }}</span>
                             </button>
                         </li>
                         <li class="nav-item">
                             <button class="nav-link btn btn-link" id="navDarkModeToggle" onclick="toggleDarkMode()" data-bs-toggle="tooltip" data-bs-title="{{ t('general_mode_toggle_tooltip_switch_to_dark', default='Switch to dark mode') | e }}" aria-label="{{ t('general_mode_toggle_dark', default='Toggle dark mode') | e }}">
                                 <i class="bi bi-moon-stars"></i>
                             </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    {% else %}
+        <nav class="navbar navbar-expand-lg bg-light">
+            <div class="container-fluid">
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="{{ t('general_toggle_navigation', default='Toggle navigation') | e }}">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav">
+                        {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
+                        {% for item in nav_items %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == item.endpoint %}active{% endif %}" href="{{ item.url | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t(item.tooltip_key, default=item.label) | e }}" aria-current="{% if request.endpoint == item.endpoint %}page{% endif %}">
+                                    <i class="bi {{ item.icon | default('bi-question-circle') | e }} me-2"></i>{{ t(item.label_key, default=item.label) | e }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                        {% if not current_user.is_subscribed and not current_user.is_trial_active() %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'subscribe_bp.subscribe' %}active{% endif %}" href="{{ url_for('subscribe_bp.subscribe') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('subscribe_tooltip', default='Subscribe to continue') | e }}" aria-current="{% if request.endpoint == 'subscribe_bp.subscribe' %}page{% endif %}">
+                                    <i class="bi bi-star-fill me-2"></i>{{ t('subscribe_title', default='Subscribe') | e }}
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == 'view_data' %}active{% endif %}" href="{{ url_for('view_data') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('view_data_tooltip', default='View your data') | e }}" aria-current="{% if request.endpoint == 'view_data' %}page{% endif %}">
+                                    <i class="bi bi-eye me-2"></i>{{ t('view_data_title', default='View Data') | e }}
+                                </a>
+                            </li>
+                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.endpoint == 'users.logout' %}active{% endif %}" href="{{ url_for('users.logout') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_logout_tooltip', default='Log out of your account') | e }}" aria-current="{% if request.endpoint == 'users.logout' %}page{% endif %}">
+                                <i class="bi bi-box-arrow-right me-2"></i>{{ t('general_logout', default='Logout') | e }}
+                            </a>
                         </li>
                     </ul>
                 </div>
@@ -118,8 +156,9 @@
         <div class="container mt-3">
             <div class="alert alert-warning alert-dismissible fade show" role="alert">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                {{ t('subscribe_prompt', default='Your trial has expired. Subscribe now to continue using all features.') | e }}
+                {{ t('subscribe_prompt', default='Your trial has expired. Subscribe now to continue using all features or view your data.') | e }}
                 <a href="{{ url_for('subscribe_bp.subscribe') | e }}" class="btn btn-sm btn-primary ms-2">{{ t('subscribe_button', default='Subscribe Now') | e }}</a>
+                <a href="{{ url_for('view_data') | e }}" class="btn btn-sm btn-secondary ms-2">{{ t('view_data_button', default='View Data') | e }}</a>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ t('general_close', default='Close') | e }}"></button>
             </div>
         </div>
@@ -134,8 +173,9 @@
     {% if current_user.is_authenticated %}
         <nav class="bottom-nav d-md-none" role="navigation" aria-label="{{ t('general_mobile_navigation', default='Mobile navigation') | e }}">
             <div class="nav-container">
-                {% for item in bottom_nav_items %}
-                    <a href="{{ item.url | default('#') | e }}" class="nav-item {% if request.endpoint == item.endpoint %}active{% endif %}" aria-label="{{ t(item.label_key, default=item.label) | e }}">
+                {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
+                {% for item in nav_items %}
+                    <a href="{{ item.url | e }}" class="nav-item {% if request.endpoint == item.endpoint %}active{% endif %}" aria-label="{{ t(item.label_key, default=item.label) | e }}">
                         <i class="bi {{ item.icon | default('bi-question-circle') | e }}"></i>
                         <div class="nav-label">{{ t(item.label_key, default=item.label) | e }}</div>
                     </a>
@@ -145,7 +185,15 @@
                         <i class="bi bi-star-fill"></i>
                         <div class="nav-label">{{ t('subscribe_title', default='Subscribe') | e }}</div>
                     </a>
+                    <a href="{{ url_for('view_data') | e }}" class="nav-item {% if request.endpoint == 'view_data' %}active{% endif %}" aria-label="{{ t('view_data_title', default='View Data') | e }}">
+                        <i class="bi bi-eye"></i>
+                        <div class="nav-label">{{ t('view_data_title', default='View Data') | e }}</div>
+                    </a>
                 {% endif %}
+                <a href="{{ url_for('users.logout') | e }}" class="nav-item {% if request.endpoint == 'users.logout' %}active{% endif %}" aria-label="{{ t('general_logout', default='Logout') | e }}">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <div class="nav-label">{{ t('general_logout', default='Logout') | e }}</div>
+                </a>
             </div>
         </nav>
     {% endif %}
@@ -153,23 +201,23 @@
     {% if not current_user.is_authenticated %}
         <footer class="footer" role="contentinfo">
             <div class="container-fluid">
-                <p>{{ t('general_about_ficore_africa', default='About FiCore Africa') | e }}: {{ t('general_empowering_financial_growth', default='Empowering financial growth across Africa since 2025') | e }}</p>
-                <p class="footer-disclaimer"><i class="bi bi-shield-fill-check me-2" aria-hidden="true"></i> {{ t('general_disclaimer', default='FiCore is not a bank and does not hold or move funds.') | e }} <a href="{{ url_for('general_bp.about') | e }}">{{ t('general_learn_more', default='Learn more') | e }}</a></p>
+                <p>{{ t('general_about_app', default='About Business Finance') | e }}: {{ t('general_empowering_financial_growth', default='Empowering financial growth for traders and startups since 2025') | e }}</p>
+                <p class="footer-disclaimer"><i class="bi bi-shield-fill-check me-2" aria-hidden="true"></i> {{ t('general_disclaimer', default='Business Finance is not a bank and does not hold or move funds.') | e }} <a href="{{ url_for('general_bp.about') | e }}">{{ t('general_learn_more', default='Learn more') | e }}</a></p>
                 <div class="footer-links">
                     <a href="{{ url_for('general_bp.terms') | e }}">{{ t('general_terms_of_service', default='Terms of Service') | e }}</a>
                     <a href="{{ url_for('general_bp.privacy') | e }}">{{ t('general_privacy_policy', default='Privacy Policy') | e }}</a>
-                    <a href="mailto:support@ficoreafrica.com"><i class="bi bi-envelope-fill me-2" aria-hidden="true"></i> {{ t('general_contact_us', default='Contact Us') | e }}</a>
+                    <a href="mailto:support@businessfinance.com"><i class="bi bi-envelope-fill me-2" aria-hidden="true"></i> {{ t('general_contact_us', default='Contact Us') | e }}</a>
                     <a href="{{ url_for('general_bp.feedback') | e }}"><i class="bi bi-chat-fill me-2" aria-hidden="true"></i> {{ t('general_provide_feedback', default='Provide Feedback') | e }}</a>
                     <a href="{{ url_for('users.login') | e }}"><i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i> {{ t('general_login', default='Login') | e }}</a>
                 </div>
                 <div class="social-icons">
-                    <a href="https://linkedin.com/company/ficoreafrica" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_connect_on_linkedin', default='Connect on LinkedIn') | e }}">
+                    <a href="https://linkedin.com/company/businessfinance" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_connect_on_linkedin', default='Connect on LinkedIn') | e }}">
                         <i class="fab fa-linkedin"></i> LinkedIn
                     </a>
-                    <a href="https://x.com/Ficore_Africa" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_follow_on_twitter', default='Follow on Twitter') | e }}">
+                    <a href="https://x.com/BusinessFinance" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_follow_on_twitter', default='Follow on Twitter') | e }}">
                         <i class="fab fa-x-twitter"></i> Twitter
                     </a>
-                    <a href="https://facebook.com/ficoreafrica" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_follow_on_facebook', default='Follow on Facebook') | e }}">
+                    <a href="https://facebook.com/businessfinance" target="_blank" rel="noopener noreferrer" aria-label="{{ t('general_follow_on_facebook', default='Follow on Facebook') | e }}">
                         <i class="fab fa-facebook"></i> Facebook
                     </a>
                 </div>
@@ -204,16 +252,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous" defer></script>
-    <script src="https://www.gstatic.com/dialogflow-console/fast/messenger-bootstrap.js"></script>
-    <df-messenger
-      intent="WELCOME"
-      chat-title="Ficore Assistant"
-      agent-id="{{ dialogflow_agent_id | default('ficoreassistant-kywl') }}"
-      language-code="{{ lang | default('en') }}"
-      chat-icon="{{ url_for('static', filename='img/chat-icon.png') | e }}"
-    ></df-messenger>
     <script>
-        // Custom confetti effect to replace canvas-confetti
+        // Custom confetti effect
         function launchConfetti() {
             const canvas = document.createElement('canvas');
             canvas.style.position = 'fixed';
@@ -299,7 +339,7 @@
             if (!window.isAuthenticatedContentBlocked) {
                 window.isAuthenticatedContentBlocked = true;
                 clearUserData();
-                window.location.href = '/login';
+                window.location.href = '{{ url_for('users.login') | e }}';
             }
         }
 
@@ -342,14 +382,6 @@
         })();
 
         document.addEventListener('DOMContentLoaded', function() {
-            const dfMessenger = document.querySelector('df-messenger');
-            if (!dfMessenger) {
-                console.error('Dialogflow Messenger error:', event.detail);
-            }
-            dfMessenger.addEventListener('df-messenger-loaded', () => {
-                console.log('Dialogflow Messenger loaded successfully.');
-            });
-
             // Initialize tooltips for all toggle buttons
             document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(tooltipTriggerEl => {
                 new bootstrap.Tooltip(tooltipTriggerEl);
@@ -374,14 +406,14 @@
                 }
             }
 
-            // Navbar collapse fix: Close menu on link click for mobile (for unauthenticated nav)
+            // Navbar collapse fix: Close menu on link click for mobile
             const navbarToggler = document.querySelector('.navbar-toggler');
             const navbarCollapse = document.querySelector('#navbarNav');
             if (navbarToggler && navbarCollapse) {
                 document.querySelectorAll('.navbar-nav .nav-link').forEach(link => {
                     link.addEventListener('click', () => {
                         if (navbarCollapse.classList.contains('show')) {
-                            navbarToggler.click(); // Programmatically trigger toggler click to close menu
+                            navbarToggler.click();
                         }
                     });
                 });
@@ -415,7 +447,7 @@
             toggles.forEach(darkModeToggle => {
                 const icon = darkModeToggle.querySelector('i');
                 icon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
-                icon.style.color = isDark ? '#ffc107' : '#6c757d'; // Yellow for sun, gray for moon
+                icon.style.color = isDark ? '#ffc107' : '#6c757d';
                 icon.style.transform = isDark ? 'scale(1.1)' : 'scale(1)';
                 darkModeToggle.setAttribute('data-bs-title', isDark ? '{{ t("general_mode_toggle_tooltip_switch_to_light", default="Switch to light mode") | e }}' : '{{ t("general_mode_toggle_tooltip_switch_to_dark", default="Switch to dark mode") | e }}');
                 darkModeToggle.setAttribute('aria-label', isDark ? '{{ t("general_mode_toggle_light", default="Toggle light mode") | e }}' : '{{ t("general_mode_toggle_dark", default="Toggle dark mode") | e }}');
@@ -444,10 +476,6 @@
                 });
                 if (!response.ok) throw new Error('Failed to toggle language');
                 languageTexts.forEach(text => text.textContent = newLangText);
-                const dfMessenger = document.querySelector('df-messenger');
-                if (dfMessenger) {
-                    dfMessenger.setAttribute('language-code', newLang);
-                }
                 window.location.reload();
             } catch (error) {
                 console.error('Failed to toggle language:', error);
@@ -457,15 +485,7 @@
         async function loadNotificationCount() {
             if (window.isAuthenticatedContentBlocked) return;
             try {
-                const endpoint = {% if current_user.is_authenticated %}
-                    {% if current_user.role == 'personal' %}
-                        '{{ url_for("personal.summaries.notification_count") | e }}'
-                    {% else %}
-                        '{{ url_for("business.notification_count") | e }}'
-                    {% endif %}
-                {% else %}
-                    '';
-                {% endif %};
+                const endpoint = '{{ url_for("notifications.count") | e }}';
                 if (!endpoint) return;
                 const response = await fetch(endpoint, {
                     headers: {
@@ -493,15 +513,7 @@
                 return;
             }
             try {
-                const endpoint = {% if current_user.is_authenticated %}
-                    {% if current_user.role == 'personal' %}
-                        '{{ url_for("personal.summaries.notifications") | e }}'
-                    {% else %}
-                        '{{ url_for("business.notifications") | e }}'
-                    {% endif %}
-                {% else %}
-                    '';
-                {% endif %};
+                const endpoint = '{{ url_for("notifications.list") | e }}';
                 if (!endpoint) {
                     body.innerHTML = `
                         <div class="notification-card">
