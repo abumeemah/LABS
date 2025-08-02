@@ -114,6 +114,17 @@
         {% endwith %}
     </div>
 
+    {% if current_user.is_authenticated and not current_user.is_subscribed and not current_user.is_trial_active() %}
+        <div class="container mt-3">
+            <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                {{ t('subscribe_prompt', default='Your trial has expired. Subscribe now to continue using all features.') | e }}
+                <a href="{{ url_for('subscribe_bp.subscribe') | e }}" class="btn btn-sm btn-primary ms-2">{{ t('subscribe_button', default='Subscribe Now') | e }}</a>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ t('general_close', default='Close') | e }}"></button>
+            </div>
+        </div>
+    {% endif %}
+
     <main class="main-content">
         <div class="container-fluid">
             {% block content %}{% endblock %}
@@ -129,6 +140,12 @@
                         <div class="nav-label">{{ t(item.label_key, default=item.label) | e }}</div>
                     </a>
                 {% endfor %}
+                {% if not current_user.is_subscribed and not current_user.is_trial_active() %}
+                    <a href="{{ url_for('subscribe_bp.subscribe') | e }}" class="nav-item {% if request.endpoint == 'subscribe_bp.subscribe' %}active{% endif %}" aria-label="{{ t('subscribe_title', default='Subscribe') | e }}">
+                        <i class="bi bi-star-fill"></i>
+                        <div class="nav-label">{{ t('subscribe_title', default='Subscribe') | e }}</div>
+                    </a>
+                {% endif %}
             </div>
         </nav>
     {% endif %}
