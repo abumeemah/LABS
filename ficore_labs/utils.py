@@ -10,22 +10,10 @@ from flask_limiter.util import get_remote_address
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from werkzeug.routing import BuildError
-import time
 from wtforms import ValidationError
-
-# Flask extensions
-from flask_login import LoginManager
-from flask_session import Session
-from flask_wtf.csrf import CSRFProtect
-from flask_babel import Babel
-from flask_compress import Compress
+from flask_login import current_user
 
 # Initialize extensions
-login_manager = LoginManager()
-flask_session = Session()
-csrf = CSRFProtect()
-babel = Babel()
-compress = Compress()
 limiter = Limiter(key_func=get_remote_address, default_limits=['200 per day', '50 per hour'], storage_uri='memory://')
 
 # Set up logging
@@ -445,6 +433,9 @@ def requires_role(role):
                 if current_user.role not in allowed_roles:
                     flash('You do not have permission to access this page.', 'danger')
                     return redirect(url_for('dashboard.index'))
+                if not current_user.is_trial_active():
+                    logger.info(f"User {current_user.id} trial expired, redirecting to subscription")
+                    return redirect(url_for('subscribe.subscription_required'))
                 return f(*args, **kwargs)
         return decorated_function
     return decorator
@@ -452,7 +443,6 @@ def requires_role(role):
 def is_admin():
     try:
         with current_app.app_context():
-            from flask_login import current_user
             return current_user.is_authenticated and current_user.role == 'admin'
     except Exception:
         return False
@@ -523,7 +513,6 @@ def get_user_language():
 def log_user_action(action, details=None, user_id=None):
     try:
         with current_app.app_context():
-            from flask_login import current_user
             if user_id is None and current_user.is_authenticated:
                 user_id = current_user.id
             session_id = session.get('sid', 'no-session-id') if has_request_context() else 'no-session-id'
@@ -543,9 +532,10 @@ def log_user_action(action, details=None, user_id=None):
         logger.error(f"Error logging user action: {str(e)}")
 
 __all__ = [
-    'login_manager', 'clean_currency', 'log_tool_usage', 'flask_session', 'csrf', 'babel', 'compress', 'limiter',
-    'get_limiter', 'create_anonymous_session', 'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin',
-    'format_currency', 'format_date', 'sanitize_input', 'generate_unique_id', 'validate_required_fields',
-    'get_user_language', 'log_user_action', 'initialize_tools_with_urls', 'TRADER_TOOLS', 'TRADER_NAV',
-    'STARTUP_TOOLS', 'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 'ALL_TOOLS'
+    'clean_currency', 'log_tool_usage', 'get_limiter', 'create_anonymous_session', 
+    'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin', 'format_currency', 
+    'format_date', 'sanitize_input', 'generate_unique_id', 'validate_required_fields',
+    'get_user_language', 'log_user_action', 'initialize_tools_with_urls', 
+    'TRADER_TOOLS', 'TRADER_NAV', 'STARTUP_TOOLS', 'STARTUP_NAV', 'ADMIN_TOOLS', 
+    'ADMIN_NAV', 'ALL_TOOLS'
 ]
