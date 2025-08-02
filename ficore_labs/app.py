@@ -227,9 +227,9 @@ def create_app():
         raise ValueError('MONGO_URI must be set')
 
     # Add URL generation configurations to fix BuildError
-    app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'localhost:5000')  # Default for development
+    app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'ficore-labs-records.onrender.com')
     app.config['APPLICATION_ROOT'] = os.getenv('APPLICATION_ROOT', '/')
-    app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'http')  # Use 'https' in production
+    app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'https')  
 
     # Initialize MongoDB
     try:
