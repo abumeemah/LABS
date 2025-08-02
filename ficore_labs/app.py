@@ -275,7 +275,7 @@ def create_app():
     # Initialize database
     try:
         with app.app_context():
-            from database import initialize_app_data
+            from models import initialize_app_data
             initialize_app_data(app)
             logger.info('Database initialized successfully')
     except Exception as e:
