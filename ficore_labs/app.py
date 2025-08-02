@@ -22,9 +22,11 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
-    UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV
+    UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
+    trans_function, get_translations
 )
 from translations import trans, register_translation
+
 
 # Load environment variables
 load_dotenv()
@@ -212,6 +214,10 @@ class User(UserMixin):
             return datetime.utcnow() <= self.trial_end
         return False
 
+    @property
+    def is_admin(self):
+        return self.role == 'admin'
+
 def create_app():
     app = Flask(__name__, template_folder='templates', static_folder='static')
     CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -305,6 +311,8 @@ def create_app():
     from receipts.routes import receipts_bp
     from reports.routes import reports_bp
     from admin.routes import admin_bp
+    from general.routes import general_bp
+    from business.routes import business
     from funds.routes import funds_bp
     from forecasts.routes import forecasts_bp
     from investor_reports.routes import investor_reports_bp
@@ -321,7 +329,23 @@ def create_app():
     app.register_blueprint(forecasts_bp, url_prefix='/forecasts')
     app.register_blueprint(investor_reports_bp, url_prefix='/investor-reports')
     app.register_blueprint(subscribe_bp, url_prefix='/subscribe')
+    app.register_blueprint(general_bp, url_prefix='/general')
+    app.register_blueprint(business, url_prefix='/business')
     logger.info('Registered core business finance blueprints')
+
+    # Set up Jinja globals
+    app.jinja_env.globals.update(
+        FACEBOOK_URL=app.config.get('FACEBOOK_URL', 'https://facebook.com/ficoreafrica'),
+        TWITTER_URL=app.config.get('TWITTER_URL', 'https://x.com/ficoreafrica'),
+        LINKEDIN_URL=app.config.get('LINKEDIN_URL', 'https://linkedin.com/company/ficoreafrica'),
+        FEEDBACK_FORM_URL=app.config.get('FEEDBACK_FORM_URL', '#'),
+        WAITLIST_FORM_URL=app.config.get('WAITLIST_FORM_URL', '#'),
+        CONSULTANCY_FORM_URL=app.config.get('CONSULTANCY_FORM_URL', '#'),
+        trans=trans,
+        trans_function=trans_function,
+        get_translations=get_translations,
+        is_admin=lambda: current_user.is_admin if current_user.is_authenticated else False
+    )
 
     # Template filters and context processors
     @app.template_filter('format_number')
