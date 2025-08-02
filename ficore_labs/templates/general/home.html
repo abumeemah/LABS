@@ -109,27 +109,6 @@
             </div>
         </div>
 
-        <!-- Notifications -->
-        <div class="section-card notifications">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h3 class="section-title mb-0">{{ t('general_notifications', default='Notifications') | e }}</h3>
-                <span class="badge bg-primary rounded-pill" id="notificationCount">0</span>
-            </div>
-            <div id="notificationList">
-                <div class="notification-card">
-                    <div class="notification-item">
-                        <div class="notification-icon">
-                            <i class="bi bi-info-circle text-muted"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-description">{{ t('general_no_notifications', default='No notifications') | e }}</div>
-                            <div class="notification-time text-muted">{{ t('general_check_back_later', default='Check back later') | e }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Quick Actions -->
         <section class="quick-actions-section">
             <h3 class="quick-actions-heading">{{ t('general_quick_actions', default='Quick Actions') | e }}</h3>
@@ -188,12 +167,6 @@
 
 <style>
 .spacer { margin: 1.5rem 0; }
-.notification-card { border-bottom: 1px solid #e9ecef; padding: 0.75rem 0; }
-.notification-item { display: flex; align-items: center; gap: 0.75rem; }
-.notification-icon { font-size: 1.25rem; }
-.notification-content { flex-grow: 1; }
-.notification-description { font-size: 0.9rem; font-weight: 500; }
-.notification-time { font-size: 0.8rem; }
 .quick-action-card.disabled { opacity: 0.5; pointer-events: none; }
 .explore-card.disabled { opacity: 0.5; pointer-events: none; }
 .promotion-card { padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem; }
@@ -231,10 +204,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     {% if current_user.is_authenticated %}
-        // Load financial data, notifications, and recent activity
+        // Load financial data and recent activity
         loadFinancialSummary();
         loadRecentActivity();
-        loadNotifications();
     {% endif %}
 });
 
@@ -254,8 +226,6 @@ const translations = {
     balanced: '{{ t("general_balanced", default="Balanced") | e }}',
     no_recent_activity: '{{ t("general_no_recent_activity", default="No recent activity") | e }}',
     start_by_adding_debt: '{{ t("general_start_adding", default="Start by adding a debt or transaction") | e }}',
-    no_notifications: '{{ t("general_no_notifications", default="No notifications") | e }}',
-    check_back_later: '{{ t("general_check_back_later", default="Check back later") | e }}',
     view_all: '{{ t("general_view_all", default="View All") | e }}',
     view_less: '{{ t("general_view_less", default="View Less") | e }}'
 };
@@ -335,73 +305,6 @@ function updateViewAllLink() {
     viewAllLink.textContent = isShowingAllActivities ? translations.view_less : translations.view_all;
 }
 
-// Load notifications
-function loadNotifications() {
-    // Update notification count
-    fetch('{{ url_for("business.notification_count") | e }}')
-        .then(response => response.json())
-        .then(data => {
-            const notificationCount = document.getElementById('notificationCount');
-            notificationCount.textContent = data.count || 0;
-            notificationCount.className = `badge bg-${data.count > 0 ? 'danger' : 'primary'} rounded-pill`;
-        })
-        .catch(error => {
-            console.error('Error loading notification count:', error);
-        });
-
-    // Fetch and display notifications
-    fetch('{{ url_for("business.notifications") | e }}')
-        .then(response => response.json())
-        .then(data => {
-            const notificationList = document.getElementById('notificationList');
-            if (data && data.length > 0) {
-                notificationList.innerHTML = data.map(notification => `
-                    <div class="notification-card">
-                        <div class="notification-item">
-                            <div class="notification-icon">
-                                <i class="bi ${getNotificationIcon(notification.type)} ${notification.read ? 'text-muted' : 'text-primary'}"></i>
-                            </div>
-                            <div class="notification-content">
-                                <div class="notification-description fw-semibold">${notification.message}</div>
-                                <div class="notification-time text-muted">${formatTimeAgo(notification.timestamp)}</div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                notificationList.innerHTML = `
-                    <div class="notification-card">
-                        <div class="notification-item">
-                            <div class="notification-icon">
-                                <i class="bi bi-info-circle text-muted"></i>
-                            </div>
-                            <div class="notification-content">
-                                <div class="notification-description fw-semibold">${translations.no_notifications}</div>
-                                <div class="notification-time text-muted">${translations.check_back_later}</div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
-        })
-        .catch(error => {
-            console.error('Error loading notifications:', error);
-            const notificationList = document.getElementById('notificationList');
-            notificationList.innerHTML = `
-                <div class="notification-card">
-                    <div class="notification-item">
-                        <div class="notification-icon">
-                            <i class="bi bi-info-circle text-muted"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-description fw-semibold">${translations.no_notifications}</div>
-                            <div class="notification-time text-muted">${translations.check_back_later}</div>
-                        </div>
-                    </div>
-                `;
-        });
-}
-
 function updateDebtSummary(data) {
     const totalIOwe = data.totalIOwe || 0;
     const totalIAmOwed = data.totalIAmOwed || 0;
@@ -445,39 +348,30 @@ function updateCashflowSummary(data) {
 
 function getActivityIcon(type) {
     const icons = {
-        'debt_added': 'bi-plus-circle',
-        'debt_settled': 'bi-check-circle',
+        'debtor_added': 'bi-person-plus',
+        'creditor_added': 'bi-person-plus',
+        'forecast_added': 'bi-file-earmark-plus',
+        'fund_added': 'bi-file-earmark-plus',
+        'investor_report_added': 'bi-file-earmark-plus',
+        'feedback_submitted': 'bi-star-fill',
         'money_in': 'bi-arrow-down-circle',
-        'money_out': 'bi-arrow-up-circle',
-        'reminder_sent': 'bi-bell',
-        'trader_registered': 'bi-person-plus'
+        'money_out': 'bi-arrow-up-circle'
     };
     return icons[type] || 'bi-circle';
 }
 
 function getActivityColor(type) {
-    const icons = {
-        'debt_added': 'text-primary',
-        'debt_settled': 'text-success',
+    const colors = {
+        'debtor_added': 'text-primary',
+        'creditor_added': 'text-primary',
+        'forecast_added': 'text-info',
+        'fund_added': 'text-info',
+        'investor_report_added': 'text-info',
+        'feedback_submitted': 'text-warning',
         'money_in': 'text-success',
-        'money_out': 'text-danger',
-        'reminder_sent': 'text-warning',
-        'trader_registered': 'text-primary'
+        'money_out': 'text-danger'
     };
-    return icons[type] || 'text-muted';
-}
-
-function getNotificationIcon(type) {
-    const icons = {
-        'email': 'bi-envelope',
-        'sms': 'bi-chat',
-        'whatsapp': 'bi-whatsapp',
-        'info': 'bi-info-circle',
-        'warning': 'bi-exclamation-triangle',
-        'error': 'bi-x-circle',
-        'success': 'bi-check-circle'
-    };
-    return icons[type] || 'bi-info-circle';
+    return colors[type] || 'text-muted';
 }
 
 function formatTimeAgo(timestamp) {
