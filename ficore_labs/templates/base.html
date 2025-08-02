@@ -34,7 +34,7 @@
                     <span class="greeting-text">{{ t('general_hi_user', default='Hi') | e }}, {{ current_user.display_name | default(current_user.id) | e }}</span>
                 </a>
             {% else %}
-                <a class="navbar-brand" href="{{ url_for('index') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
+                <a class="navbar-brand" href="{{ url_for('general_bp.index') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
                     <img src="{{ url_for('static', filename='img/logo.png') | e }}" alt="{{ t('general_app_logo', default='Business Finance Logo') | e }}" class="app-logo">
                     <span class="brand-text">{{ t('general_app_title', default='Business Finance') | e }}</span>
                 </a>
@@ -69,21 +69,13 @@
                 </button>
                 <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                     <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_home_tooltip', default='Go to homepage') | e }}" aria-current="{% if request.endpoint == 'index' %}page{% endif %}">{{ t('general_home', default='Home') | e }}</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'general_bp.about' %}active{% endif %}" href="{{ url_for('general_bp.about') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_about_tooltip', default='Learn more about us') | e }}" aria-current="{% if request.endpoint == 'general_bp.about' %}page{% endif %}">{{ t('general_about', default='About') | e }}</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'general_bp.contact' %}active{% endif %}" href="{{ url_for('general_bp.contact') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_contact_tooltip', default='Get in touch') | e }}" aria-current="{% if request.endpoint == 'general_bp.contact' %}page{% endif %}">{{ t('general_contact', default='Contact') | e }}</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'users.login' %}active{% endif %}" href="{{ url_for('users.login') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}" aria-current="{% if request.endpoint == 'users.login' %}page{% endif %}">{{ t('general_login', default='Login') | e }}</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.endpoint == 'users.signup' %}active{% endif %}" href="{{ url_for('users.signup') | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_tooltip', default='Create a new account') | e }}" aria-current="{% if request.endpoint == 'users.signup' %}page{% endif %}">{{ t('general_signup', default='Sign Up') | e }}</a>
-                        </li>
+                        {% for item in UNAUTHENTICATED_NAV %}
+                            <li class="nav-item">
+                                <a class="nav-link {% if request.endpoint == item.endpoint %}active{% endif %}" href="{{ item.url | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t(item.tooltip_key, default=item.label) | e }}" aria-current="{% if request.endpoint == item.endpoint %}page{% endif %}">
+                                    <i class="bi {{ item.icon | default('bi-question-circle') | e }} me-2"></i>{{ t(item.label_key, default=item.label) | e }}
+                                </a>
+                            </li>
+                        {% endfor %}
                         <li class="nav-item">
                             <button class="nav-link btn btn-link language-toggle" id="navLanguageToggle" onclick="toggleLanguage()" data-bs-toggle="tooltip" data-bs-title="{{ t('general_language_toggle_tooltip', default='Toggle language') | e }}" aria-label="{{ t('general_language_toggle', default='Toggle language') | e }}">
                                 <i class="bi bi-globe"></i>
