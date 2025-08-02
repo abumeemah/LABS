@@ -1,0 +1,361 @@
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, Response, session
+from flask_login import login_required, current_user
+from flask_wtf import FlaskForm
+from wtforms import StringField, FloatField, TextAreaField, SubmitField, SelectField
+from wtforms.validators import DataRequired, Optional
+from bson import ObjectId
+from datetime import datetime
+import logging
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from helpers.branding_helpers import draw_ficore_pdf_header, ficore_csv_header
+import csv
+import utils
+from translations import trans
+
+logger = logging.getLogger(__name__)
+
+class FundForm(FlaskForm):
+    source = StringField(trans('funds_source', default='Funding Source'), validators=[DataRequired()])
+    amount = FloatField(trans('funds_amount', default='Amount'), validators=[DataRequired()])
+    category = SelectField(trans('funds_category', default='Category'), 
+                          choices=[('equity', trans('funds_equity', default='Equity')), 
+                                  ('debt', trans('funds_debt', default='Debt')), 
+                                  ('grant', trans('funds_grant', default='Grant'))], 
+                          validators=[DataRequired()])
+    description = TextAreaField(trans('general_description', default='Description'), validators=[Optional()])
+    submit = SubmitField(trans('funds_add_fund', default='Add Fund'))
+
+funds_bp = Blueprint('funds', __name__, url_prefix='/funds')
+
+@funds_bp.route('/')
+@login_required
+@utils.requires_role('startup')
+def index():
+    """List all fund records for the current user."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'type': 'fund'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'fund'}
+        funds = list(db.records.find(query).sort('created_at', -1))
+        
+        return render_template(
+            'funds/index.html',
+            funds=funds,
+            title=trans('funds_index', default='Fund Tracking', lang=session.get('lang', 'en'))
+        )
+    except Exception as e:
+        logger.error(f"Error fetching funds for user {current_user.id}: {str(e)}")
+        flash(trans('funds_fetch_error', default='An error occurred'), 'danger')
+        return redirect(url_for('dashboard.index'))
+
+@funds_bp.route('/manage')
+@login_required
+@utils.requires_role('startup')
+def manage():
+    """List all fund records for management (edit/delete) by the current user."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'type': 'fund'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'fund'}
+        funds = list(db.records.find(query).sort('created_at', -1))
+        
+        return render_template(
+            'funds/manage_funds.html',
+            funds=funds,
+            title=trans('funds_manage', default='Manage Funds', lang=session.get('lang', 'en'))
+        )
+    except Exception as e:
+        logger.error(f"Error fetching funds for manage page for user {current_user.id}: {str(e)}")
+        flash(trans('funds_fetch_error', default='An error occurred'), 'danger')
+        return redirect(url_for('funds.index'))
+
+@funds_bp.route('/view/<id>')
+@login_required
+@utils.requires_role('startup')
+def view(id):
+    """View detailed information about a specific fund (JSON API)."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        fund = db.records.find_one(query)
+        if not fund:
+            return jsonify({'error': trans('funds_record_not_found', default='Record not found')}), 404
+        
+        fund['_id'] = str(fund['_id'])
+        fund['created_at'] = fund['created_at'].isoformat() if fund.get('created_at') else None
+        
+        return jsonify(fund)
+    except Exception as e:
+        logger.error(f"Error fetching fund {id} for user {current_user.id}: {str(e)}")
+        return jsonify({'error': trans('funds_fetch_error', default='An error occurred')}), 500
+
+@funds_bp.route('/view_page/<id>')
+@login_required
+@utils.requires_role('startup')
+def view_page(id):
+    """Render a detailed view page for a specific fund."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        fund = db.records.find_one(query)
+        if not fund:
+            flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+            return redirect(url_for('funds.index'))
+        
+        return render_template(
+            'funds/view.html',
+            fund=fund,
+            title=trans('funds_details', default='Fund Details', lang=session.get('lang', 'en'))
+        )
+    except Exception as e:
+        logger.error(f"Error rendering fund view page {id} for user {current_user.id}: {str(e)}")
+        flash(trans('funds_view_error', default='An error occurred'), 'danger')
+        return redirect(url_for('funds.index'))
+
+@funds_bp.route('/generate_report/<id>')
+@login_required
+@utils.requires_role('startup')
+def generate_report(id):
+    """Generate PDF report for a fund."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        fund = db.records.find_one(query)
+        
+        if not fund:
+            flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+            return redirect(url_for('funds.index'))
+        
+        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
+            flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
+            return redirect(url_for('agents_bp.manage_credits'))
+        
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        draw_ficore_pdf_header(p, current_user, y_start=10.5)
+        
+        header_height = 0.7
+        extra_space = 0.2
+        title_y = 10.5 - header_height - extra_space
+        
+        p.setFont("Helvetica-Bold", 24)
+        p.drawString(inch, title_y * inch, trans('funds_report_title', default='FiCore Records - Fund Report'))
+        
+        p.setFont("Helvetica", 12)
+        y_position = title_y - 0.5
+        p.drawString(inch, y_position * inch, f"{trans('funds_source', default='Source')}: {fund['source']}")
+        y_position -= 0.3
+        p.drawString(inch, y_position * inch, f"{trans('funds_amount', default='Amount')}: {utils.format_currency(fund['amount'])}")
+        y_position -= 0.3
+        p.drawString(inch, y_position * inch, f"{trans('funds_category', default='Category')}: {fund['category'].capitalize()}")
+        y_position -= 0.3
+        p.drawString(inch, y_position * inch, f"{trans('general_description', default='Description')}: {fund.get('description', 'No description provided')}")
+        y_position -= 0.3
+        p.drawString(inch, y_position * inch, f"{trans('funds_date_recorded', default='Date Recorded')}: {utils.format_date(fund['created_at'])}")
+        
+        p.setFont("Helvetica-Oblique", 10)
+        p.drawString(inch, inch, trans('funds_report_footer', default='This document serves as a fund report recorded on FiCore Records.'))
+        
+        p.showPage()
+        p.save()
+        
+        if not utils.is_admin():
+            user_query = utils.get_user_query(str(current_user.id))
+            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
+            db.ficore_credit_transactions.insert_one({
+                'user_id': str(current_user.id),
+                'amount': -1,
+                'type': 'spend',
+                'date': datetime.utcnow(),
+                'ref': f"Fund report generated for {fund['source']}"
+            })
+        
+        buffer.seek(0)
+        return Response(
+            buffer.getvalue(),
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename=FiCore_Fund_Report_{fund["source"]}.pdf'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating fund report {id}: {str(e)}")
+        flash(trans('funds_report_generation_error', default='An error occurred'), 'danger')
+        return redirect(url_for('funds.index'))
+
+@funds_bp.route('/generate_report_csv/<id>')
+@login_required
+@utils.requires_role('startup')
+def generate_report_csv(id):
+    """Generate CSV report for a fund."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        fund = db.records.find_one(query)
+        
+        if not fund:
+            flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+            return redirect(url_for('funds.index'))
+        
+        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
+            flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
+            return redirect(url_for('agents_bp.manage_credits'))
+        
+        output = []
+        output.extend(ficore_csv_header(current_user))
+        output.append([trans('funds_report_title', default='FiCore Records - Fund Report')])
+        output.append([''])
+        output.append([trans('funds_source', default='Source'), fund['source']])
+        output.append([trans('funds_amount', default='Amount'), utils.format_currency(fund['amount'])])
+        output.append([trans('funds_category', default='Category'), fund['category'].capitalize()])
+        output.append([trans('general_description', default='Description'), fund.get('description', 'No description provided')])
+        output.append([trans('funds_date_recorded', default='Date Recorded'), utils.format_date(fund['created_at'])])
+        output.append([''])
+        output.append([trans('funds_report_footer', default='This document serves as a fund report recorded on FiCore Records.')])
+        
+        if not utils.is_admin():
+            user_query = utils.get_user_query(str(current_user.id))
+            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
+            db.ficore_credit_transactions.insert_one({
+                'user_id': str(current_user.id),
+                'amount': -1,
+                'type': 'spend',
+                'date': datetime.utcnow(),
+                'ref': f"Fund report CSV generated for {fund['source']}"
+            })
+        
+        buffer = io.BytesIO()
+        writer = csv.writer(buffer, lineterminator='\n')
+        writer.writerows(output)
+        buffer.seek(0)
+        
+        return Response(
+            buffer,
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment; filename=FiCore_Fund_Report_{fund["source"]}.csv'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating fund report CSV {id}: {str(e)}")
+        flash(trans('funds_report_generation_error', default='An error occurred'), 'danger')
+        return redirect(url_for('funds.index'))
+
+@funds_bp.route('/add', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('startup')
+def add():
+    """Add a new fund record."""
+    form = FundForm()
+    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
+        flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to add fund'), 'danger')
+        return redirect(url_for('agents_bp.manage_credits'))
+
+    if form.validate_on_submit():
+        try:
+            db = utils.get_mongo_db()
+            fund_data = {
+                'user_id': str(current_user.id),
+                'type': 'fund',
+                'source': form.source.data,
+                'amount': form.amount.data,
+                'category': form.category.data,
+                'description': form.description.data,
+                'created_at': datetime.utcnow()
+            }
+            db.records.insert_one(fund_data)
+            
+            if not utils.is_admin():
+                user_query = utils.get_user_query(str(current_user.id))
+                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
+                db.ficore_credit_transactions.insert_one({
+                    'user_id': str(current_user.id),
+                    'amount': -1,
+                    'type': 'spend',
+                    'date': datetime.utcnow(),
+                    'ref': f"Fund added: {form.source.data}"
+                })
+            
+            flash(trans('funds_add_success', default='Fund added successfully'), 'success')
+            return redirect(url_for('funds.index'))
+        except Exception as e:
+            logger.error(f"Error adding fund for user {current_user.id}: {str(e)}")
+            flash(trans('funds_add_error', default='An error occurred while adding fund'), 'danger')
+
+    return render_template(
+        'funds/add.html',
+        form=form,
+        title=trans('funds_add_fund', default='Add Fund', lang=session.get('lang', 'en'))
+    )
+
+@funds_bp.route('/edit/<id>', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('startup')
+def edit(id):
+    """Edit an existing fund record."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        fund = db.records.find_one(query)
+        
+        if not fund:
+            flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+            return redirect(url_for('funds.index'))
+
+        form = FundForm(data={
+            'source': fund['source'],
+            'amount': fund['amount'],
+            'category': fund['category'],
+            'description': fund.get('description', '')
+        })
+
+        if form.validate_on_submit():
+            try:
+                updated_record = {
+                    'source': form.source.data,
+                    'amount': form.amount.data,
+                    'category': form.category.data,
+                    'description': form.description.data,
+                    'updated_at': datetime.utcnow()
+                }
+                db.records.update_one(
+                    {'_id': ObjectId(id)},
+                    {'$set': updated_record}
+                )
+                flash(trans('funds_edit_success', default='Fund updated successfully'), 'success')
+                return redirect(url_for('funds.index'))
+            except Exception as e:
+                logger.error(f"Error updating fund {id} for user {current_user.id}: {str(e)}")
+                flash(trans('funds_edit_error', default='An error occurred'), 'danger')
+
+        return render_template(
+            'funds/edit.html',
+            form=form,
+            fund=fund,
+            title=trans('funds_edit_fund', default='Edit Fund', lang=session.get('lang', 'en'))
+        )
+    except Exception as e:
+        logger.error(f"Error fetching fund {id} for user {current_user.id}: {str(e)}")
+        flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+        return redirect(url_for('funds.index'))
+
+@funds_bp.route('/delete/<id>', methods=['POST'])
+@login_required
+@utils.requires_role('startup')
+def delete(id):
+    """Delete a fund record."""
+    try:
+        db = utils.get_mongo_db()
+        query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
+        result = db.records.delete_one(query)
+        if result.deleted_count:
+            flash(trans('funds_delete_success', default='Fund deleted successfully'), 'success')
+        else:
+            flash(trans('funds_record_not_found', default='Record not found'), 'danger')
+    except Exception as e:
+        logger.error(f"Error deleting fund {id} for user {current_user.id}: {str(e)}")
+        flash(trans('funds_delete_error', default='An error occurred'), 'danger')
+    return redirect(url_for('funds.index'))
