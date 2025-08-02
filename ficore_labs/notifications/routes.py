@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 from flask_login import current_user, login_required
-from utils import get_mongo_db, logger, trans
+from utils import get_mongo_db, logger
 from flask import request, session
 
 notifications = Blueprint('notifications', __name__, url_prefix='/notifications')
@@ -30,4 +30,5 @@ def count():
             f"Error fetching notification count for user {user_id}: {str(e)}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
         )
+
         return jsonify({'error': trans('notification_count_error', lang=session.get('lang', 'en'))}), 500
