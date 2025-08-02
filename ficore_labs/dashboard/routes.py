@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, session
+from flask import Blueprint, render_template, redirect, url_for, flash
 from flask_login import login_required, current_user
 from translations import trans
 import utils
@@ -25,43 +25,36 @@ def index():
         recent_debtors = []
         recent_payments = []
         recent_receipts = []
-        personal_finance_summary = {}
+        recent_funds = []
+        stats = {}
 
         # Fetch data based on user role
-        if current_user.role in ['trader', 'admin']:
-            # Fetch recent data using new schema for traders and admins
+        if current_user.role in ['trader', 'startup', 'admin']:
+            # Fetch recent data for business finance modules
             recent_creditors = list(db.records.find({**query, 'type': 'creditor'}).sort('created_at', -1).limit(5))
             recent_debtors = list(db.records.find({**query, 'type': 'debtor'}).sort('created_at', -1).limit(5))
             recent_payments = list(db.cashflows.find({**query, 'type': 'payment'}).sort('created_at', -1).limit(5))
             recent_receipts = list(db.cashflows.find({**query, 'type': 'receipt'}).sort('created_at', -1).limit(5))
+            recent_funds = list(db.funds.find(query).sort('created_at', -1).limit(5))
 
-        if current_user.role in ['personal', 'admin']:
-            # Fetch personal finance data for personal users and admins
-            try:
-                # Get latest records from each personal finance tool
-                latest_budget = db.budgets.find_one(query, sort=[('created_at', -1)])
-                latest_bill = db.bills.find_one(query, sort=[('created_at', -1)])
-
-                # Count total records
-                total_budgets = db.budgets.count_documents(query)
-                total_bills = db.bills.count_documents(query)
-                overdue_bills = db.bills.count_documents({**query, 'status': 'overdue'})
-                
-                personal_finance_summary = {
-                    'latest_budget': latest_budget,
-                    'latest_bill': latest_bill,
-                    'total_budgets': total_budgets,
-                    'total_bills': total_bills,
-                    'overdue_bills': overdue_bills,
-                    'has_personal_data': any([latest_budget, latest_bill])
-                }
-            except Exception as e:
-                logger.error(f"Error fetching personal finance data for user {current_user.id}: {str(e)}")
-                personal_finance_summary = {'has_personal_data': False}
+            # Calculate stats
+            stats = {
+                'total_debtors': db.records.count_documents({**query, 'type': 'debtor'}),
+                'total_creditors': db.records.count_documents({**query, 'type': 'creditor'}),
+                'total_payments': db.cashflows.count_documents({**query, 'type': 'payment'}),
+                'total_receipts': db.cashflows.count_documents({**query, 'type': 'receipt'}),
+                'total_funds': db.funds.count_documents(query),
+                'total_debtors_amount': sum(doc['amount_owed'] for doc in db.records.find({**query, 'type': 'debtor'})),
+                'total_creditors_amount': sum(doc['amount_owed'] for doc in db.records.find({**query, 'type': 'creditor'})),
+                'total_funds_amount': sum(doc['amount'] for doc in db.funds.find(query))
+            }
 
         # Convert ObjectIds to strings for template rendering
-        for item in recent_creditors + recent_debtors + recent_payments + recent_receipts:
+        for item in recent_creditors + recent_debtors + recent_payments + recent_receipts + recent_funds:
             item['_id'] = str(item['_id'])
+
+        # Check subscription status
+        can_interact = current_user.is_trial_active or current_user.is_subscribed
 
         return render_template(
             'dashboard/index.html',
@@ -69,7 +62,9 @@ def index():
             recent_debtors=recent_debtors,
             recent_payments=recent_payments,
             recent_receipts=recent_receipts,
-            personal_finance_summary=personal_finance_summary
+            recent_funds=recent_funds,
+            stats=stats,
+            can_interact=can_interact
         )
     except Exception as e:
         logger.error(f"Error fetching dashboard data for user {current_user.id}: {str(e)}")
