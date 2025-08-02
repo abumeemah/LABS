@@ -53,7 +53,7 @@ logger = SessionAdapter(root_logger, {})
 # Navigation lists
 _UNAUTHENTICATED_NAV = [
     {
-        "endpoint": "general_bp.index",
+        "endpoint": "general_bp.home",
         "label": "Home",
         "label_key": "general_home",
         "description_key": "general_home_desc",
@@ -284,7 +284,7 @@ _STARTUP_NAV = [
 
 _ADMIN_TOOLS = [
     {
-        "endpoint": "admin.index",
+        "endpoint": "admin.dashboard",
         "label": "Dashboard",
         "label_key": "admin_dashboard",
         "description_key": "admin_dashboard_desc",
@@ -303,7 +303,7 @@ _ADMIN_TOOLS = [
 
 _ADMIN_NAV = [
     {
-        "endpoint": "admin.index",
+        "endpoint": "admin.dashboard",
         "label": "Dashboard",
         "label_key": "admin_dashboard",
         "description_key": "admin_dashboard_desc",
