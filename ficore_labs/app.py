@@ -306,7 +306,7 @@ def create_app():
     from receipts.routes import receipts_bp
     from reports.routes import reports_bp
     from admin.routes import admin_bp
-    from dashboard import dashboard_bp
+    from dashboard.routes import dashboard_bp
     from general.routes import general_bp
     from business.routes import business
     from funds.routes import funds_bp
