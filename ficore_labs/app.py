@@ -329,7 +329,7 @@ def create_app():
     logger.info('Registered core business finance blueprints')
 
     # Initialize tools and navigation after blueprints
-    @app.before_first_request
+    @app.before_request
     def initialize_navigation():
         with app.app_context():
             try:
