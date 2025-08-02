@@ -23,87 +23,13 @@ reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 class ReportForm(FlaskForm):
     start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
     end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
+    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html')
     submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
 
 class CustomerReportForm(FlaskForm):
-    role = SelectField('User Role', choices=[('', 'All'), ('personal', 'Personal'), ('trader', 'Trader'), ('agent', 'Agent'), ('admin', 'Admin')], validators=[Optional()])
+    role = SelectField('User Role', choices=[('', 'All'), ('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[Optional()])
     format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html')
     submit = SubmitField('Generate Report')
-
-class DebtorsCreditorsReportForm(FlaskForm):
-    start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
-    end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
-    record_type = SelectField('Record Type', choices=[('', 'All'), ('debtor', 'Debtor'), ('creditor', 'Creditor')], validators=[Optional()])
-    submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
-
-class TaxObligationsReportForm(FlaskForm):
-    start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
-    end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
-    status = SelectField('Status', choices=[('', 'All'), ('pending', 'Pending'), ('paid', 'Paid'), ('overdue', 'Overdue')], validators=[Optional()])
-    submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
-
-class BudgetPerformanceReportForm(FlaskForm):
-    start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
-    end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
-    submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
-
-class ShoppingReportForm(FlaskForm):
-    start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
-    end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
-    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html')
-    submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
-
-def to_dict_budget(record):
-    if not record:
-        return {'surplus_deficit': None, 'savings_goal': None}
-    return {
-        'id': str(record.get('_id', '')),
-        'income': record.get('income', 0),
-        'fixed_expenses': record.get('fixed_expenses', 0),
-        'variable_expenses': record.get('variable_expenses', 0),
-        'savings_goal': record.get('savings_goal', 0),
-        'surplus_deficit': record.get('surplus_deficit', 0),
-        'housing': record.get('housing', 0),
-        'food': record.get('food', 0),
-        'transport': record.get('transport', 0),
-        'dependents': record.get('dependents', 0),
-        'miscellaneous': record.get('miscellaneous', 0),
-        'others': record.get('others', 0),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso')
-    }
-
-def to_dict_bill(record):
-    if not record:
-        return {'amount': None, 'status': None}
-    return {
-        'id': str(record.get('_id', '')),
-        'bill_name': record.get('bill_name', ''),
-        'amount': record.get('amount', 0),
-        'due_date': utils.format_date(record.get('due_date'), format_type='iso'),
-        'frequency': record.get('frequency', ''),
-        'category': record.get('category', ''),
-        'status': record.get('status', ''),
-        'send_email': record.get('send_email', False),
-        'reminder_days': record.get('reminder_days'),
-        'user_email': record.get('user_email', ''),
-        'first_name': record.get('first_name', '')
-    }
-
-def to_dict_tax_reminder(record):
-    if not record:
-        return {'tax_type': None, 'amount': None}
-    return {
-        'id': str(record.get('_id', '')),
-        'user_id': record.get('user_id', ''),
-        'tax_type': record.get('tax_type', ''),
-        'due_date': utils.format_date(record.get('due_date'), format_type='iso'),
-        'amount': record.get('amount', 0),
-        'status': record.get('status', ''),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'notification_id': record.get('notification_id'),
-        'sent_at': utils.format_date(record.get('sent_at'), format_type='iso') if record.get('sent_at') else None,
-        'payment_location_id': record.get('payment_location_id')
-    }
 
 def to_dict_record(record):
     if not record:
@@ -123,7 +49,6 @@ def to_dict_record(record):
         'contact': record.get('contact', ''),
         'amount_owed': record.get('amount_owed', 0),
         'description': record.get('description', ''),
-        'reminder_count': record.get('reminder_count', 0),
         'created_at': created_at,
         'updated_at': updated_at
     }
@@ -146,61 +71,76 @@ def to_dict_cashflow(record):
             result[key] = datetime.combine(value, datetime.min.time())
     return result
 
-def to_dict_shopping_list(record):
+def to_dict_fund(record):
     if not record:
-        return {'name': None, 'budget': None}
+        return {'source': None, 'amount': None}
     return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'name': record.get('name', ''),
-        'budget': record.get('budget', 0),
-        'total_spent': record.get('total_spent', 0),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None,
-        'collaborators': record.get('collaborators', [])
-    }
-
-def to_dict_shopping_item(record):
-    if not record:
-        return {'name': None, 'price': None}
-    return {
-        'id': str(record.get('_id', '')),
-        'list_id': str(record.get('list_id', '')),
-        'name': str(record.get('name', '')),
-        'quantity': record.get('quantity', 0),
-        'price': record.get('price', 0),
-        'status': record.get('status', ''),
-        'category': record.get('category', ''),
-        'store': record.get('store', ''),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
-    }
-
-def to_dict_shopping_suggestion(record):
-    if not record:
-        return {'name': None, 'price': None}
-    return {
-        'id': str(record.get('_id', '')),
-        'list_id': str(record.get('list_id', '')),
-        'user_id': str(record.get('user_id', '')),
-        'name': str(record.get('name', '')),
-        'quantity': record.get('quantity', 0),
-        'price': record.get('price', 0),
-        'category': record.get('category', ''),
+        'source': record.get('source', ''),
+        'amount': record.get('amount', 0),
+        'date_received': utils.format_date(record.get('date_received'), format_type='iso') if record.get('date_received') else None,
         'status': record.get('status', ''),
         'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
         'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
     }
+
+def to_dict_forecast(record):
+    if not record:
+        return {'scenario': None, 'projected_revenue': None}
+    return {
+        'id': str(record.get('_id', '')),
+        'user_id': str(record.get('user_id', '')),
+        'scenario': record.get('scenario', ''),
+        'projected_revenue': record.get('projected_revenue', 0),
+        'projected_expenses': record.get('projected_expenses', 0),
+        'period_start': utils.format_date(record.get('period_start'), format_type='iso') if record.get('period_start') else None,
+        'period_end': utils.format_date(record.get('period_end'), format_type='iso') if record.get('period_end') else None,
+        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
+        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+    }
+
+def to_dict_investor_report(record):
+    if not record:
+        return {'title': None, 'financial_metrics': None}
+    return {
+        'id': str(record.get('_id', '')),
+        'user_id': str(record.get('user_id', '')),
+        'title': record.get('title', ''),
+        'financial_metrics': record.get('financial_metrics', {}),
+        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
+        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+    }
+
+def check_subscription_status():
+    if utils.is_admin():
+        return True
+    user = utils.get_user_query(str(current_user.id))
+    db = utils.get_mongo_db()
+    user_data = db.users.find_one(user)
+    if user_data.get('is_subscribed', False):
+        return True
+    if user_data.get('is_trial', False) and user_data.get('trial_start') and user_data.get('trial_end'):
+        current_time = datetime.utcnow()
+        if user_data['trial_start'] <= current_time <= user_data['trial_end']:
+            return True
+    return False
 
 @reports_bp.route('/')
 @login_required
-@utils.requires_role(['personal', 'trader'])
+@utils.requires_role(['trader', 'startup'])
 def index():
-    """Display report selection page."""
     try:
+        db = utils.get_mongo_db()
+        user = utils.get_user_query(str(current_user.id))
+        user_data = db.users.find_one(user)
+        is_subscribed = user_data.get('is_subscribed', False)
+        is_trial_active = user_data.get('is_trial', False) and user_data.get('trial_start') and user_data.get('trial_end') and user_data['trial_start'] <= datetime.utcnow() <= user_data['trial_end']
         return render_template(
             'reports/index.html',
-            title=utils.trans('reports_index', default='Reports', lang=session.get('lang', 'en'))
+            title=utils.trans('reports_index', default='Reports', lang=session.get('lang', 'en')),
+            is_subscribed=is_subscribed,
+            is_trial_active=is_trial_active
         )
     except Exception as e:
         logger.error(f"Error loading reports index for user {current_user.id}: {str(e)}", exc_info=True)
@@ -209,13 +149,12 @@ def index():
 
 @reports_bp.route('/profit_loss', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'startup'])
 def profit_loss():
-    """Generate profit/loss report with filters."""
     form = ReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate a report. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
+    if not check_subscription_status():
+        flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
+        return redirect(url_for('subscribe.index'))
     cashflows = []
     query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
     if form.validate_on_submit():
@@ -228,24 +167,11 @@ def profit_loss():
                 end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
             cashflows = [to_dict_cashflow(cf) for cf in db.cashflows.find(query).sort('created_at', -1)]
-            output_format = request.form.get('format', 'html')
+            output_format = form.format.data
             if output_format == 'pdf':
                 return generate_profit_loss_pdf(cashflows)
             elif output_format == 'csv':
                 return generate_profit_loss_csv(cashflows)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': 'Profit/Loss report generation (Ficore Credits)'
-                })
         except Exception as e:
             logger.error(f"Error generating profit/loss report for user {current_user.id}: {str(e)}", exc_info=True)
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
@@ -260,18 +186,18 @@ def profit_loss():
         'reports/profit_loss.html',
         form=form,
         cashflows=cashflows,
-        title=utils.trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en'))
+        title=utils.trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en')),
+        read_only=not check_subscription_status()
     )
 
 @reports_bp.route('/debtors_creditors', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'startup'])
 def debtors_creditors():
-    """Generate debtors/creditors report with filters."""
-    form = DebtorsCreditorsReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate a report. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
+    form = ReportForm()
+    if not check_subscription_status():
+        flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
+        return redirect(url_for('subscribe.index'))
     records = []
     query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
     if form.validate_on_submit():
@@ -283,27 +209,12 @@ def debtors_creditors():
             if form.end_date.data:
                 end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
-            if form.record_type.data:
-                query['type'] = form.record_type.data
             records = [to_dict_record(r) for r in db.records.find(query).sort('created_at', -1)]
-            output_format = request.form.get('format', 'html')
+            output_format = form.format.data
             if output_format == 'pdf':
                 return generate_debtors_creditors_pdf(records)
             elif output_format == 'csv':
                 return generate_debtors_creditors_csv(records)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': 'Debtors/Creditors report generation (Ficore Credits)'
-                })
         except Exception as e:
             logger.error(f"Error generating debtors/creditors report for user {current_user.id}: {str(e)}", exc_info=True)
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
@@ -318,221 +229,143 @@ def debtors_creditors():
         'reports/debtors_creditors.html',
         form=form,
         records=records,
-        title=utils.trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en'))
+        title=utils.trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en')),
+        read_only=not check_subscription_status()
     )
 
-@reports_bp.route('/tax_obligations', methods=['GET', 'POST'])
+@reports_bp.route('/funds', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role('trader')
-def tax_obligations():
-    """Generate tax obligations report with filters."""
-    form = TaxObligationsReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate a report. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
-    tax_reminders = []
+@utils.requires_role(['startup'])
+def funds():
+    form = ReportForm()
+    if not check_subscription_status():
+        flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
+        return redirect(url_for('subscribe.index'))
+    funds = []
     query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
             if form.start_date.data:
                 start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
-                query['due_date'] = {'$gte': start_datetime}
+                query['created_at'] = {'$gte': start_datetime}
             if form.end_date.data:
                 end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
-                query['due_date'] = query.get('due_date', {}) | {'$lte': end_datetime}
-            if form.status.data:
-                query['status'] = form.status.data
-            tax_reminders = [to_dict_tax_reminder(tr) for tr in db.tax_reminders.find(query).sort('due_date', 1)]
-            output_format = request.form.get('format', 'html')
-            if output_format == 'pdf':
-                return generate_tax_obligations_pdf(tax_reminders)
-            elif output_format == 'csv':
-                return generate_tax_obligations_csv(tax_reminders)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': 'Tax Obligations report generation (Ficore Credits)'
-                })
-        except Exception as e:
-            logger.error(f"Error generating tax obligations report for user {current_user.id}: {str(e)}", exc_info=True)
-            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
-    else:
-        try:
-            db = utils.get_mongo_db()
-            tax_reminders = [to_dict_tax_reminder(tr) for tr in db.tax_reminders.find(query).sort('due_date', 1)]
-        except Exception as e:
-            logger.error(f"Error fetching tax reminders for user {current_user.id}: {str(e)}", exc_info=True)
-            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
-    return render_template(
-        'reports/tax_obligations.html',
-        form=form,
-        tax_reminders=tax_reminders,
-        title=utils.trans('reports_tax_obligations', default='Tax Obligations Report', lang=session.get('lang', 'en'))
-    )
-
-@reports_bp.route('/budget_performance', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('personal')
-def budget_performance():
-    """Generate budget performance report with filters."""
-    form = BudgetPerformanceReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate a report. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
-    budget_data = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
-    if form.validate_on_submit():
-        try:
-            db = utils.get_mongo_db()
-            budget_query = query.copy()
-            cashflow_query = query.copy()
-            if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
-                budget_query['created_at'] = {'$gte': start_datetime}
-                cashflow_query['created_at'] = {'$gte': start_datetime}
-            if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
-                budget_query['created_at'] = budget_query.get('created_at', {}) | {'$lte': end_datetime}
-                cashflow_query['created_at'] = cashflow_query.get('created_at', {}) | {'$lte': end_datetime}
-            budgets = list(db.budgets.find(budget_query).sort('created_at', -1))
-            cashflows = [to_dict_cashflow(cf) for cf in db.cashflows.find(cashflow_query).sort('created_at', -1)]
-            for budget in budgets:
-                budget_dict = to_dict_budget(budget)
-                actual_income = sum(cf['amount'] for cf in cashflows if cf['type'] == 'receipt')
-                actual_expenses = sum(cf['amount'] for cf in cashflows if cf['type'] == 'payment')
-                budget_dict['actual_income'] = actual_income
-                budget_dict['actual_expenses'] = actual_expenses
-                budget_dict['income_variance'] = actual_income - budget_dict['income']
-                budget_dict['expense_variance'] = actual_expenses - (budget_dict['fixed_expenses'] + budget_dict['variable_expenses'])
-                budget_data.append(budget_dict)
-            output_format = request.form.get('format', 'html')
-            if output_format == 'pdf':
-                return generate_budget_performance_pdf(budget_data)
-            elif output_format == 'csv':
-                return generate_budget_performance_csv(budget_data)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': 'Budget Performance report generation (Ficore Credits)'
-                })
-        except Exception as e:
-            logger.error(f"Error generating budget performance report for user {current_user.id}: {str(e)}", exc_info=True)
-            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
-    else:
-        try:
-            db = utils.get_mongo_db()
-            budgets = list(db.budgets.find(query).sort('created_at', -1))
-            cashflows = [to_dict_cashflow(cf) for cf in db.cashflows.find(query).sort('created_at', -1)]
-            for budget in budgets:
-                budget_dict = to_dict_budget(budget)
-                actual_income = sum(cf['amount'] for cf in cashflows if cf['type'] == 'receipt')
-                actual_expenses = sum(cf['amount'] for cf in cashflows if cf['type'] == 'payment')
-                budget_dict['actual_income'] = actual_income
-                budget_dict['actual_expenses'] = actual_expenses
-                budget_dict['income_variance'] = actual_income - budget_dict['income']
-                budget_dict['expense_variance'] = actual_expenses - (budget_dict['fixed_expenses'] + budget_dict['variable_expenses'])
-                budget_data.append(budget_dict)
-        except Exception as e:
-            logger.error(f"Error fetching budget data for user {current_user.id}: {str(e)}", exc_info=True)
-            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
-    return render_template(
-        'reports/budget_performance.html',
-        form=form,
-        budget_data=budget_data,
-        title=utils.trans('reports_budget_performance', default='Budget Performance Report', lang=session.get('lang', 'en'))
-    )
-
-@reports_bp.route('/shopping', methods=['GET', 'POST'])
-@login_required
-@utils.requires_role('personal')
-def shopping_report():
-    """Generate shopping report with filters for personal users."""
-    form = ShoppingReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate a report. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
-    shopping_data = {'lists': [], 'items': [], 'suggestions': []}
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
-    if form.validate_on_submit():
-        try:
-            db = utils.get_mongo_db()
-            list_query = query.copy()
-            item_query = query.copy()
-            suggestion_query = query.copy()
-            if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
-                list_query['created_at'] = {'$gte': start_datetime}
-                item_query['created_at'] = {'$gte': start_datetime}
-                suggestion_query['created_at'] = {'$gte': start_datetime}
-            if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
-                list_query['created_at'] = list_query.get('created_at', {}) | {'$lte': end_datetime}
-                item_query['created_at'] = item_query.get('created_at', {}) | {'$lte': end_datetime}
-                suggestion_query['created_at'] = suggestion_query.get('created_at', {}) | {'$lte': end_datetime}
-            lists = [to_dict_shopping_list(lst) for lst in db.shopping_lists.find(list_query).sort('created_at', -1)]
-            items = [to_dict_shopping_item(item) for item in db.shopping_items.find(item_query).sort('created_at', -1)]
-            suggestions = [to_dict_shopping_suggestion(sug) for sug in db.shopping_suggestions.find(suggestion_query).sort('created_at', -1)]
-            shopping_data = {'lists': lists, 'items': items, 'suggestions': suggestions}
+                query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
+            funds = [to_dict_fund(f) for f in db.funds.find(query).sort('created_at', -1)]
             output_format = form.format.data
             if output_format == 'pdf':
-                return generate_shopping_report_pdf(shopping_data)
+                return generate_funds_pdf(funds)
             elif output_format == 'csv':
-                return generate_shopping_report_csv(shopping_data)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': 'Shopping Report generation (Ficore Credits)'
-                })
+                return generate_funds_csv(funds)
         except Exception as e:
-            logger.error(f"Error generating shopping report for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(f"Error generating funds report for user {current_user.id}: {str(e)}", exc_info=True)
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
-            lists = [to_dict_shopping_list(lst) for lst in db.shopping_lists.find(query).sort('created_at', -1)]
-            items = [to_dict_shopping_item(item) for item in db.shopping_items.find(query).sort('created_at', -1)]
-            suggestions = [to_dict_shopping_suggestion(sug) for sug in db.shopping_suggestions.find(query).sort('created_at', -1)]
-            shopping_data = {'lists': lists, 'items': items, 'suggestions': suggestions}
+            funds = [to_dict_fund(f) for f in db.funds.find(query).sort('created_at', -1)]
         except Exception as e:
-            logger.error(f"Error fetching shopping data for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(f"Error fetching funds for user {current_user.id}: {str(e)}", exc_info=True)
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     return render_template(
-        'reports/shopping.html',
+        'reports/funds.html',
         form=form,
-        shopping_data=shopping_data,
-        title=utils.trans('reports_shopping', default='Shopping Report', lang=session.get('lang', 'en'))
+        funds=funds,
+        title=utils.trans('reports_funds', default='Funds Report', lang=session.get('lang', 'en')),
+        read_only=not check_subscription_status()
+    )
+
+@reports_bp.route('/forecasts', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role(['startup'])
+def forecasts():
+    form = ReportForm()
+    if not check_subscription_status():
+        flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
+        return redirect(url_for('subscribe.index'))
+    forecasts = []
+    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    if form.validate_on_submit():
+        try:
+            db = utils.get_mongo_db()
+            if form.start_date.data:
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                query['period_start'] = {'$gte': start_datetime}
+            if form.end_date.data:
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                query['period_end'] = query.get('period_end', {}) | {'$lte': end_datetime}
+            forecasts = [to_dict_forecast(f) for f in db.forecasts.find(query).sort('created_at', -1)]
+            output_format = form.format.data
+            if output_format == 'pdf':
+                return generate_forecasts_pdf(forecasts)
+            elif output_format == 'csv':
+                return generate_forecasts_csv(forecasts)
+        except Exception as e:
+            logger.error(f"Error generating forecasts report for user {current_user.id}: {str(e)}", exc_info=True)
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    else:
+        try:
+            db = utils.get_mongo_db()
+            forecasts = [to_dict_forecast(f) for f in db.forecasts.find(query).sort('created_at', -1)]
+        except Exception as e:
+            logger.error(f"Error fetching forecasts for user {current_user.id}: {str(e)}", exc_info=True)
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    return render_template(
+        'reports/forecasts.html',
+        form=form,
+        forecasts=forecasts,
+        title=utils.trans('reports_forecasts', default='Forecasts Report', lang=session.get('lang', 'en')),
+        read_only=not check_subscription_status()
+    )
+
+@reports_bp.route('/investor_reports', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role(['startup'])
+def investor_reports():
+    form = ReportForm()
+    if not check_subscription_status():
+        flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
+        return redirect(url_for('subscribe.index'))
+    reports = []
+    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    if form.validate_on_submit():
+        try:
+            db = utils.get_mongo_db()
+            if form.start_date.data:
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                query['created_at'] = {'$gte': start_datetime}
+            if form.end_date.data:
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
+            reports = [to_dict_investor_report(r) for r in db.investor_reports.find(query).sort('created_at', -1)]
+            output_format = form.format.data
+            if output_format == 'pdf':
+                return generate_investor_reports_pdf(reports)
+            elif output_format == 'csv':
+                return generate_investor_reports_csv(reports)
+        except Exception as e:
+            logger.error(f"Error generating investor reports for user {current_user.id}: {str(e)}", exc_info=True)
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    else:
+        try:
+            db = utils.get_mongo_db()
+            reports = [to_dict_investor_report(r) for r in db.investor_reports.find(query).sort('created_at', -1)]
+        except Exception as e:
+            logger.error(f"Error fetching investor reports for user {current_user.id}: {str(e)}", exc_info=True)
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    return render_template(
+        'reports/investor_reports.html',
+        form=form,
+        reports=reports,
+        title=utils.trans('reports_investor_reports', default='Investor Reports', lang=session.get('lang', 'en')),
+        read_only=not check_subscription_status()
     )
 
 @reports_bp.route('/admin/customer-reports', methods=['GET', 'POST'])
 @login_required
 @utils.requires_role('admin')
 def customer_reports():
-    """Generate customer reports for admin."""
     form = CustomerReportForm()
     if form.validate_on_submit():
         role = form.role.data if form.role.data else None
@@ -542,77 +375,74 @@ def customer_reports():
             pipeline = [
                 {'$match': {'role': role}} if role else {},
                 {'$lookup': {
-                    'from': 'budgets',
+                    'from': 'records',
+                    'let': {'user_id': '$_id'},
+                    'pipeline': [
+                        {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}}},
+                        {'$group': {
+                            '_id': '$type',
+                            'total_amount': {'$sum': '$amount_owed'}
+                        }}
+                    ],
+                    'as': 'record_totals'
+                }},
+                {'$lookup': {
+                    'from': 'cashflows',
+                    'let': {'user_id': '$_id'},
+                    'pipeline': [
+                        {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}}},
+                        {'$group': {
+                            '_id': '$type',
+                            'total_amount': {'$sum': '$amount'}
+                        }}
+                    ],
+                    'as': 'cashflow_totals'
+                }},
+                {'$lookup': {
+                    'from': 'funds',
                     'let': {'user_id': '$_id'},
                     'pipeline': [
                         {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}}},
                         {'$sort': {'created_at': -1}},
                         {'$limit': 1}
                     ],
-                    'as': 'latest_budget'
+                    'as': 'latest_fund'
                 }},
                 {'$lookup': {
-                    'from': 'bills',
+                    'from': 'forecasts',
                     'let': {'user_id': '$_id'},
                     'pipeline': [
                         {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}}},
-                        {'$group': {
-                            '_id': '$status',
-                            'count': {'$sum': 1}
-                        }}
-                    ],
-                    'as': 'bill_status_counts'
-                }},
-                {'$lookup': {
-                    'from': 'learning_materials',
-                    'let': {'user_id': '$_id'},
-                    'pipeline': [
-                        {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}}},
-                        {'$group': {
-                            '_id': None,
-                            'total_lessons_completed': {'$sum': {'$size': '$lessons_completed'}}
-                        }}
-                    ],
-                    'as': 'learning_progress'
-                }},
-                {'$lookup': {
-                    'from': 'tax_reminders',
-                    'let': {'user_id': '$_id'},
-                    'pipeline': [
-                        {'$match': {'$expr': {'$eq': ['$user_id', '$$user_id']}, 'due_date': {'$gte': datetime.utcnow()}}},
-                        {'$sort': {'due_date': 1}},
+                        {'$sort': {'created_at': -1}},
                         {'$limit': 1}
                     ],
-                    'as': 'next_tax_reminder'
-                }},
+                    'as': 'latest_forecast'
+                }}
             ]
             users = list(db.users.aggregate(pipeline))
             report_data = []
             for user in users:
-                budget = to_dict_budget(user['latest_budget'][0] if user['latest_budget'] else None)
-                bill_counts = {status['_id']: status['count'] for status in user['bill_status_counts']} if user['bill_status_counts'] else {'pending': 0, 'paid': 0, 'overdue': 0}
-                learning_progress = user['learning_progress'][0]['total_lessons_completed'] if user['learning_progress'] else 0
-                tax_reminder = to_dict_tax_reminder(user['next_tax_reminder'][0] if user['next_tax_reminder'] else None)
+                record_totals = {r['_id']: r['total_amount'] for r in user['record_totals']} if user['record_totals'] else {'debtor': 0, 'creditor': 0}
+                cashflow_totals = {c['_id']: c['total_amount'] for c in user['cashflow_totals']} if user['cashflow_totals'] else {'receipt': 0, 'payment': 0}
+                latest_fund = to_dict_fund(user['latest_fund'][0] if user['latest_fund'] else None)
+                latest_forecast = to_dict_forecast(user['latest_forecast'][0] if user['latest_forecast'] else None)
                 data = {
                     'username': user['_id'],
                     'email': user.get('email', ''),
                     'role': user.get('role', ''),
-                    'ficore_credit_balance': user.get('ficore_credit_balance', 0),
-                    'language': user.get('language', 'en'),
-                    'budget_income': budget['income'] if budget['income'] is not None else '-',
-                    'budget_fixed_expenses': budget['fixed_expenses'] if budget['fixed_expenses'] is not None else '-',
-                    'budget_variable_expenses': budget['variable_expenses'] if budget['variable_expenses'] is not None else '-',
-                    'budget_surplus_deficit': budget['surplus_deficit'] if budget['surplus_deficit'] is not None else '-',
-                    'pending_bills': bill_counts.get('pending', 0),
-                    'paid_bills': bill_counts.get('paid', 0),
-                    'overdue_bills': bill_counts.get('overdue', 0),
-                    'lessons_completed': learning_progress,
-                    'next_tax_due_date': utils.format_date(tax_reminder['due_date']) if tax_reminder['due_date'] else '-',
-                    'next_tax_amount': tax_reminder['amount'] if tax_reminder['amount'] is not None else '-'
+                    'is_trial': user.get('is_trial', False),
+                    'trial_end': utils.format_date(user.get('trial_end')) if user.get('trial_end') else '-',
+                    'is_subscribed': user.get('is_subscribed', False),
+                    'total_debtors': record_totals.get('debtor', 0),
+                    'total_creditors': record_totals.get('creditor', 0),
+                    'total_receipts': cashflow_totals.get('receipt', 0),
+                    'total_payments': cashflow_totals.get('payment', 0),
+                    'latest_fund_amount': latest_fund['amount'] if latest_fund['amount'] is not None else '-',
+                    'latest_forecast_revenue': latest_forecast['projected_revenue'] if latest_forecast['projected_revenue'] is not None else '-'
                 }
                 report_data.append(data)
             if report_format == 'html':
-                return render_template('reports/customer_reports.html', report_data=report_data, title='Facore Credits')
+                return render_template('reports/customer_reports.html', report_data=report_data, title='Customer Reports')
             elif report_format == 'pdf':
                 return generate_customer_report_pdf(report_data)
             elif report_format == 'csv':
@@ -625,7 +455,6 @@ def customer_reports():
 def generate_profit_loss_pdf(cashflows):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.3
@@ -643,7 +472,6 @@ def generate_profit_loss_pdf(cashflows):
         p.drawString(5 * inch, y * inch, trans('general_amount', default='Amount'))
         return y - row_height
 
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_profit_loss_report', default='Profit/Loss Report'))
@@ -674,7 +502,6 @@ def generate_profit_loss_pdf(cashflows):
         y -= row_height
         row_count += 1
 
-    # Draw totals on the same page if there's space
     if row_count + 3 <= rows_per_page:
         y -= row_height
         p.drawString(1 * inch, y * inch, f"{trans('reports_total_income', default='Total Income')}: {utils.format_currency(total_income)}")
@@ -720,7 +547,6 @@ def generate_profit_loss_csv(cashflows):
 def generate_debtors_creditors_pdf(records):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.3
@@ -739,7 +565,6 @@ def generate_debtors_creditors_pdf(records):
         p.drawString(6.5 * inch, y * inch, trans('general_description', default='Description'))
         return y - row_height
 
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_debtors_creditors_report', default='Debtors/Creditors Report'))
@@ -808,10 +633,9 @@ def generate_debtors_creditors_csv(records):
     buffer.seek(0)
     return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=debtors_creditors.csv'})
 
-def generate_tax_obligations_pdf(tax_reminders):
+def generate_funds_pdf(funds):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.3
@@ -823,16 +647,15 @@ def generate_tax_obligations_pdf(tax_reminders):
 
     def draw_table_headers(y):
         p.setFillColor(colors.black)
-        p.drawString(1 * inch, y * inch, trans('general_due_date', default='Due Date'))
-        p.drawString(2.5 * inch, y * inch, trans('general_tax_type', default='Tax Type'))
+        p.drawString(1 * inch, y * inch, trans('general_date', default='Date'))
+        p.drawString(2.5 * inch, y * inch, trans('funds_source', default='Source'))
         p.drawString(4 * inch, y * inch, trans('general_amount', default='Amount'))
         p.drawString(5 * inch, y * inch, trans('general_status', default='Status'))
         return y - row_height
 
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
-    p.drawString(1 * inch, title_y * inch, trans('reports_tax_obligations_report', default='Tax Obligations Report'))
+    p.drawString(1 * inch, title_y * inch, trans('reports_funds_report', default='Funds Report'))
     p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
     y = title_y - 0.6
     y = draw_table_headers(y)
@@ -840,7 +663,7 @@ def generate_tax_obligations_pdf(tax_reminders):
     total_amount = 0
     row_count = 0
 
-    for tr in tax_reminders:
+    for f in funds:
         if row_count >= rows_per_page:
             p.showPage()
             draw_ficore_pdf_header(p, current_user, y_start=max_y)
@@ -848,46 +671,45 @@ def generate_tax_obligations_pdf(tax_reminders):
             y = draw_table_headers(y)
             row_count = 0
 
-        p.drawString(1 * inch, y * inch, utils.format_date(tr['due_date']))
-        p.drawString(2.5 * inch, y * inch, tr['tax_type'])
-        p.drawString(4 * inch, y * inch, utils.format_currency(tr['amount']))
-        p.drawString(5 * inch, y * inch, trans(tr['status'], default=tr['status']))
-        total_amount += tr['amount']
+        p.drawString(1 * inch, y * inch, utils.format_date(f['created_at']))
+        p.drawString(2.5 * inch, y * inch, f['source'])
+        p.drawString(4 * inch, y * inch, utils.format_currency(f['amount']))
+        p.drawString(5 * inch, y * inch, trans(f['status'], default=f['status']))
+        total_amount += f['amount']
         y -= row_height
         row_count += 1
 
     if row_count + 1 <= rows_per_page:
         y -= row_height
-        p.drawString(1 * inch, y * inch, f"{trans('reports_total_tax_amount', default='Total Tax Amount')}: {utils.format_currency(total_amount)}")
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_funds', default='Total Funds')}: {utils.format_currency(total_amount)}")
     else:
         p.showPage()
         draw_ficore_pdf_header(p, current_user, y_start=max_y)
         y = title_y - 0.6
-        p.drawString(1 * inch, y * inch, f"{trans('reports_total_tax_amount', default='Total Tax Amount')}: {utils.format_currency(total_amount)}")
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_funds', default='Total Funds')}: {utils.format_currency(total_amount)}")
 
     p.save()
     buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=tax_obligations.pdf'})
+    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=funds.pdf'})
 
-def generate_tax_obligations_csv(tax_reminders):
+def generate_funds_csv(funds):
     output = []
     output.extend(ficore_csv_header(current_user))
-    output.append([trans('general_due_date', default='Due Date'), trans('general_tax_type', default='Tax Type'), trans('general_amount', default='Amount'), trans('general_status', default='Status')])
+    output.append([trans('general_date', default='Date'), trans('funds_source', default='Source'), trans('general_amount', default='Amount'), trans('general_status', default='Status')])
     total_amount = 0
-    for tr in tax_reminders:
-        output.append([utils.format_date(tr['due_date']), tr['tax_type'], utils.format_currency(tr['amount']), trans(tr['status'], default=tr['status'])])
-        total_amount += tr['amount']
-    output.append(['', '', f"{trans('reports_total_tax_amount', default='Total Tax Amount')}: {utils.format_currency(total_amount)}", ''])
+    for f in funds:
+        output.append([utils.format_date(f['created_at']), f['source'], utils.format_currency(f['amount']), trans(f['status'], default=f['status'])])
+        total_amount += f['amount']
+    output.append(['', '', f"{trans('reports_total_funds', default='Total Funds')}: {utils.format_currency(total_amount)}", ''])
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
-    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=tax_obligations.csv'})
+    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=funds.csv'})
 
-def generate_budget_performance_pdf(budget_data):
+def generate_forecasts_pdf(forecasts):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.3
@@ -899,376 +721,152 @@ def generate_budget_performance_pdf(budget_data):
 
     def draw_table_headers(y):
         p.setFillColor(colors.black)
-        headers = [
-            trans('general_date', default='Date'),
-            trans('general_income', default='Income'),
-            trans('general_actual_income', default='Actual Income'),
-            trans('general_income_variance', default='Income Variance'),
-            trans('general_fixed_expenses', default='Fixed Expenses'),
-            trans('general_variable_expenses', default='Variable Expenses'),
-            trans('general_actual_expenses', default='Actual Expenses'),
-            trans('general_expense_variance', default='Expense Variance')
-        ]
-        x_positions = [1 * inch + i * 0.9 * inch for i in range(len(headers))]
-        for header, x in zip(headers, x_positions):
-            p.drawString(x, y * inch, header)
-        return y - row_height, x_positions
+        p.drawString(1 * inch, y * inch, trans('general_date', default='Date'))
+        p.drawString(2 * inch, y * inch, trans('forecasts_scenario', default='Scenario'))
+        p.drawString(3.5 * inch, y * inch, trans('forecasts_projected_revenue', default='Projected Revenue'))
+        p.drawString(4.5 * inch, y * inch, trans('forecasts_projected_expenses', default='Projected Expenses'))
+        p.drawString(5.5 * inch, y * inch, trans('forecasts_period', default='Period'))
+        return y - row_height
 
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
-    p.setFont("Helvetica", 10)
-    p.drawString(1 * inch, title_y * inch, trans('reports_budget_performance_report', default='Budget Performance Report'))
+    p.setFont("Helvetica", 12)
+    p.drawString(1 * inch, title_y * inch, trans('reports_forecasts_report', default='Forecasts Report'))
     p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
     y = title_y - 0.6
-    y, x_positions = draw_table_headers(y)
+    y = draw_table_headers(y)
 
+    total_revenue = 0
+    total_expenses = 0
     row_count = 0
-    for bd in budget_data:
+
+    for f in forecasts:
         if row_count >= rows_per_page:
             p.showPage()
             draw_ficore_pdf_header(p, current_user, y_start=max_y)
             y = title_y - 0.6
-            y, x_positions = draw_table_headers(y)
+            y = draw_table_headers(y)
             row_count = 0
 
-        values = [
-            utils.format_date(bd['created_at']),
-            utils.format_currency(bd['income']),
-            utils.format_currency(bd['actual_income']),
-            utils.format_currency(bd['income_variance']),
-            utils.format_currency(bd['fixed_expenses']),
-            utils.format_currency(bd['variable_expenses']),
-            utils.format_currency(bd['actual_expenses']),
-            utils.format_currency(bd['expense_variance'])
-        ]
-        for value, x in zip(values, x_positions):
-            p.drawString(x, y * inch, value)
+        period = f"{utils.format_date(f['period_start'])} - {utils.format_date(f['period_end'])}" if f['period_start'] and f['period_end'] else '-'
+        p.drawString(1 * inch, y * inch, utils.format_date(f['created_at']))
+        p.drawString(2 * inch, y * inch, f['scenario'][:20])
+        p.drawString(3.5 * inch, y * inch, utils.format_currency(f['projected_revenue']))
+        p.drawString(4.5 * inch, y * inch, utils.format_currency(f['projected_expenses']))
+        p.drawString(5.5 * inch, y * inch, period[:20])
+        total_revenue += f['projected_revenue']
+        total_expenses += f['projected_expenses']
         y -= row_height
         row_count += 1
 
+    if row_count + 2 <= rows_per_page:
+        y -= row_height
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_projected_revenue', default='Total Projected Revenue')}: {utils.format_currency(total_revenue)}")
+        y -= row_height
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_projected_expenses', default='Total Projected Expenses')}: {utils.format_currency(total_expenses)}")
+    else:
+        p.showPage()
+        draw_ficore_pdf_header(p, current_user, y_start=max_y)
+        y = title_y - 0.6
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_projected_revenue', default='Total Projected Revenue')}: {utils.format_currency(total_revenue)}")
+        y -= row_height
+        p.drawString(1 * inch, y * inch, f"{trans('reports_total_projected_expenses', default='Total Projected Expenses')}: {utils.format_currency(total_expenses)}")
+
     p.save()
     buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=budget_performance.pdf'})
+    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=forecasts.pdf'})
 
-def generate_budget_performance_csv(budget_data):
+def generate_forecasts_csv(forecasts):
     output = []
     output.extend(ficore_csv_header(current_user))
     output.append([
         trans('general_date', default='Date'),
-        trans('general_income', default='Income'),
-        trans('general_actual_income', default='Actual Income'),
-        trans('general_income_variance', default='Income Variance'),
-        trans('general_fixed_expenses', default='Fixed Expenses'),
-        trans('general_variable_expenses', default='Variable Expenses'),
-        trans('general_actual_expenses', default='Actual Expenses'),
-        trans('general_expense_variance', default='Expense Variance')
+        trans('forecasts_scenario', default='Scenario'),
+        trans('forecasts_projected_revenue', default='Projected Revenue'),
+        trans('forecasts_projected_expenses', default='Projected Expenses'),
+        trans('forecasts_period', default='Period')
     ])
-    for bd in budget_data:
+    total_revenue = 0
+    total_expenses = 0
+    for f in forecasts:
+        period = f"{utils.format_date(f['period_start'])} - {utils.format_date(f['period_end'])}" if f['period_start'] and f['period_end'] else '-'
         output.append([
-            utils.format_date(bd['created_at']),
-            utils.format_currency(bd['income']),
-            utils.format_currency(bd['actual_income']),
-            utils.format_currency(bd['income_variance']),
-            utils.format_currency(bd['fixed_expenses']),
-            utils.format_currency(bd['variable_expenses']),
-            utils.format_currency(bd['actual_expenses']),
-            utils.format_currency(bd['expense_variance'])
+            utils.format_date(f['created_at']),
+            f['scenario'],
+            utils.format_currency(f['projected_revenue']),
+            utils.format_currency(f['projected_expenses']),
+            period
         ])
+        total_revenue += f['projected_revenue']
+        total_expenses += f['projected_expenses']
+    output.append(['', '', f"{trans('reports_total_projected_revenue', default='Total Projected Revenue')}: {utils.format_currency(total_revenue)}", f"{trans('reports_total_projected_expenses', default='Total Projected Expenses')}: {utils.format_currency(total_expenses)}", ''])
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
-    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=budget_performance.csv'})
+    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=forecasts.csv'})
 
-def generate_shopping_report_pdf(shopping_data):
+def generate_investor_reports_pdf(reports):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.3
-    section_space = 0.5
     bottom_margin = 0.5
     max_y = 10.5
     title_y = max_y - header_height - extra_space
     page_height = (max_y - bottom_margin) * inch
     rows_per_page = int((page_height - (title_y - 0.6) * inch) / (row_height * inch))
 
-    def draw_list_headers(y):
-        p.setFont("Helvetica", 10)
-        headers = [
-            trans('general_date', default='Date'),
-            trans('shopping_list_name', default='List Name'),
-            trans('shopping_budget', default='Budget'),
-            trans('shopping_total_spent', default='Total Spent'),
-            trans('shopping_collaborators', default='Collaborators')
-        ]
-        x_positions = [1 * inch, 2 * inch, 3.5 * inch, 4.5 * inch, 5.5 * inch]
-        for header, x in zip(headers, x_positions):
-            p.drawString(x, y * inch, header)
-        return y - row_height, x_positions
+    def draw_table_headers(y):
+        p.setFillColor(colors.black)
+        p.drawString(1 * inch, y * inch, trans('general_date', default='Date'))
+        p.drawString(2.5 * inch, y * inch, trans('investor_report_title', default='Report Title'))
+        p.drawString(4 * inch, y * inch, trans('investor_report_metrics', default='Key Metrics'))
+        return y - row_height
 
-    def draw_item_headers(y):
-        p.setFont("Helvetica", 10)
-        headers = [
-            trans('general_date', default='Date'),
-            trans('shopping_item_name', default='Item Name'),
-            trans('shopping_quantity', default='Quantity'),
-            trans('shopping_price', default='Price'),
-            trans('shopping_status', default='Status'),
-            trans('shopping_category', default='Category'),
-            trans('shopping_store', default='Store')
-        ]
-        x_positions = [1 * inch, 2 * inch, 3 * inch, 3.5 * inch, 4 * inch, 4.8 * inch, 5.5 * inch]
-        for header, x in zip(headers, x_positions):
-            p.drawString(x, y * inch, header)
-        return y - row_height, x_positions
-
-    def draw_suggestion_headers(y):
-        p.setFont("Helvetica", 10)
-        headers = [
-            trans('general_date', default='Date'),
-            trans('shopping_item_name', default='Item Name'),
-            trans('shopping_quantity', default='Quantity'),
-            trans('shopping_price', default='Price'),
-            trans('shopping_status', default='Status'),
-            trans('shopping_category', default='Category')
-        ]
-        x_positions = [1 * inch, 2 * inch, 3 * inch, 3.5 * inch, 4 * inch, 4.8 * inch]
-        for header, x in zip(headers, x_positions):
-            p.drawString(x, y * inch, header)
-        return y - row_height, x_positions
-
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
-    p.drawString(1 * inch, title_y * inch, trans('reports_shopping_report', default='Shopping Report'))
+    p.drawString(1 * inch, title_y * inch, trans('reports_investor_reports', default='Investor Reports'))
     p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
     y = title_y - 0.6
+    y = draw_table_headers(y)
 
-    # Shopping Lists Section
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(1 * inch, y * inch, trans('shopping_lists', default='Shopping Lists'))
-    y -= row_height
-    y, x_positions = draw_list_headers(y)
-    total_budget = 0
-    total_spent = 0
     row_count = 0
-
-    for lst in shopping_data['lists']:
+    for r in reports:
         if row_count >= rows_per_page:
             p.showPage()
             draw_ficore_pdf_header(p, current_user, y_start=max_y)
             y = title_y - 0.6
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(1 * inch, y * inch, trans('shopping_lists', default='Shopping Lists'))
-            y -= row_height
-            y, x_positions = draw_list_headers(y)
+            y = draw_table_headers(y)
             row_count = 0
 
-        p.drawString(x_positions[0], y * inch, utils.format_date(lst['created_at']))
-        p.drawString(x_positions[1], y * inch, lst['name'][:20])
-        p.drawString(x_positions[2], y * inch, utils.format_currency(lst['budget']))
-        p.drawString(x_positions[3], y * inch, utils.format_currency(lst['total_spent']))
-        p.drawString(x_positions[4], y * inch, ', '.join(lst['collaborators'])[:20])
-        total_budget += lst['budget']
-        total_spent += lst['total_spent']
+        metrics_summary = ', '.join([f"{k}: {utils.format_currency(v)}" if isinstance(v, (int, float)) else f"{k}: {v}" for k, v in r['financial_metrics'].items()])[:50]
+        p.drawString(1 * inch, y * inch, utils.format_date(r['created_at']))
+        p.drawString(2.5 * inch, y * inch, r['title'][:20])
+        p.drawString(4 * inch, y * inch, metrics_summary)
         y -= row_height
         row_count += 1
-
-    if row_count + 2 <= rows_per_page:
-        y -= row_height
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_budget', default='Total Budget')}: {utils.format_currency(total_budget)}")
-        y -= row_height
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_spent', default='Total Spent')}: {utils.format_currency(total_spent)}")
-    else:
-        p.showPage()
-        draw_ficore_pdf_header(p, current_user, y_start=max_y)
-        y = title_y - 0.6
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_budget', default='Total Budget')}: {utils.format_currency(total_budget)}")
-        y -= row_height
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_spent', default='Total Spent')}: {utils.format_currency(total_spent)}")
-    y -= section_space
-
-    # Shopping Items Section
-    if row_count + 3 >= rows_per_page:
-        p.showPage()
-        draw_ficore_pdf_header(p, current_user, y_start=max_y)
-        y = title_y - 0.6
-        row_count = 0
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(1 * inch, y * inch, trans('shopping_items', default='Shopping Items'))
-    y -= row_height
-    y, x_positions = draw_item_headers(y)
-    row_count += 2
-
-    total_price = 0
-    for item in shopping_data['items']:
-        if row_count >= rows_per_page:
-            p.showPage()
-            draw_ficore_pdf_header(p, current_user, y_start=max_y)
-            y = title_y - 0.6
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(1 * inch, y * inch, trans('shopping_items', default='Shopping Items'))
-            y -= row_height
-            y, x_positions = draw_item_headers(y)
-            row_count = 0
-
-        p.drawString(x_positions[0], y * inch, utils.format_date(item['created_at']))
-        p.drawString(x_positions[1], y * inch, item['name'][:20])
-        p.drawString(x_positions[2], y * inch, str(item['quantity']))
-        p.drawString(x_positions[3], y * inch, utils.format_currency(item['price']))
-        p.drawString(x_positions[4], y * inch, trans(item['status'], default=item['status']))
-        p.drawString(x_positions[5], y * inch, item['category'][:15])
-        p.drawString(x_positions[6], y * inch, item['store'][:15])
-        total_price += item['price'] * item['quantity']
-        y -= row_height
-        row_count += 1
-
-    if row_count + 1 <= rows_per_page:
-        y -= row_height
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_price', default='Total Price')}: {utils.format_currency(total_price)}")
-    else:
-        p.showPage()
-        draw_ficore_pdf_header(p, current_user, y_start=max_y)
-        y = title_y - 0.6
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_price', default='Total Price')}: {utils.format_currency(total_price)}")
-    y -= section_space
-
-    # Suggestions Section
-    if row_count + 3 >= rows_per_page:
-        p.showPage()
-        draw_ficore_pdf_header(p, current_user, y_start=max_y)
-        y = title_y - 0.6
-        row_count = 0
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(1 * inch, y * inch, trans('shopping_suggestions', default='Suggestions'))
-    y -= row_height
-    y, x_positions = draw_suggestion_headers(y)
-    row_count += 2
-
-    total_suggestion_price = 0
-    for sug in shopping_data['suggestions']:
-        if row_count >= rows_per_page:
-            p.showPage()
-            draw_ficore_pdf_header(p, current_user, y_start=max_y)
-            y = title_y - 0.6
-            p.setFont("Helvetica-Bold", 12)
-            p.drawString(1 * inch, y * inch, trans('shopping_suggestions', default='Suggestions'))
-            y -= row_height
-            y, x_positions = draw_suggestion_headers(y)
-            row_count = 0
-
-        p.drawString(x_positions[0], y * inch, utils.format_date(sug['created_at']))
-        p.drawString(x_positions[1], y * inch, sug['name'][:20])
-        p.drawString(x_positions[2], y * inch, str(sug['quantity']))
-        p.drawString(x_positions[3], y * inch, utils.format_currency(sug['price']))
-        p.drawString(x_positions[4], y * inch, trans(sug['status'], default=sug['status']))
-        p.drawString(x_positions[5], y * inch, sug['category'][:15])
-        total_suggestion_price += sug['price'] * sug['quantity']
-        y -= row_height
-        row_count += 1
-
-    if row_count + 1 <= rows_per_page:
-        y -= row_height
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_suggestion_price', default='Total Suggestion Price')}: {utils.format_currency(total_suggestion_price)}")
-    else:
-        p.showPage()
-        draw_ficore_pdf_header(p, current_user, y_start=max_y)
-        y = title_y - 0.6
-        p.drawString(x_positions[0], y * inch, f"{trans('shopping_total_suggestion_price', default='Total Suggestion Price')}: {utils.format_currency(total_suggestion_price)}")
 
     p.save()
     buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=shopping_report.pdf'})
+    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=investor_reports.pdf'})
 
-def generate_shopping_report_csv(shopping_data):
+def generate_investor_reports_csv(reports):
     output = []
     output.extend(ficore_csv_header(current_user))
-    
-    # Shopping Lists Section
-    output.append([trans('shopping_lists', default='Shopping Lists')])
-    output.append([
-        trans('general_date', default='Date'),
-        trans('shopping_list_name', default='List Name'),
-        trans('shopping_budget', default='Budget'),
-        trans('shopping_total_spent', default='Total Spent'),
-        trans('shopping_collaborators', default='Collaborators')
-    ])
-    total_budget = 0
-    total_spent = 0
-    for lst in shopping_data['lists']:
-        output.append([
-            utils.format_date(lst['created_at']),
-            lst['name'],
-            utils.format_currency(lst['budget']),
-            utils.format_currency(lst['total_spent']),
-            ', '.join(lst['collaborators'])
-        ])
-        total_budget += lst['budget']
-        total_spent += lst['total_spent']
-    output.append(['', '', f"{trans('shopping_total_budget', default='Total Budget')}: {utils.format_currency(total_budget)}", f"{trans('shopping_total_spent', default='Total Spent')}: {utils.format_currency(total_spent)}", ''])
-    output.append([])
-
-    # Shopping Items Section
-    output.append([trans('shopping_items', default='Shopping Items')])
-    output.append([
-        trans('general_date', default='Date'),
-        trans('shopping_item_name', default='Item Name'),
-        trans('shopping_quantity', default='Quantity'),
-        trans('shopping_price', default='Price'),
-        trans('shopping_status', default='Status'),
-        trans('shopping_category', default='Category'),
-        trans('shopping_store', default='Store')
-    ])
-    total_price = 0
-    for item in shopping_data['items']:
-        output.append([
-            utils.format_date(item['created_at']),
-            item['name'],
-            item['quantity'],
-            utils.format_currency(item['price']),
-            trans(item['status'], default=item['status']),
-            item['category'],
-            item['store']
-        ])
-        total_price += item['price'] * item['quantity']
-    output.append(['', '', '', f"{trans('shopping_total_price', default='Total Price')}: {utils.format_currency(total_price)}", '', '', ''])
-    output.append([])
-
-    # Suggestions Section
-    output.append([trans('shopping_suggestions', default='Suggestions')])
-    output.append([
-        trans('general_date', default='Date'),
-        trans('shopping_item_name', default='Item Name'),
-        trans('shopping_quantity', default='Quantity'),
-        trans('shopping_price', default='Price'),
-        trans('shopping_status', default='Status'),
-        trans('shopping_category', default='Category')
-    ])
-    total_suggestion_price = 0
-    for sug in shopping_data['suggestions']:
-        output.append([
-            utils.format_date(sug['created_at']),
-            sug['name'],
-            sug['quantity'],
-            utils.format_currency(sug['price']),
-            trans(sug['status'], default=sug['status']),
-            sug['category']
-        ])
-        total_suggestion_price += sug['price'] * sug['quantity']
-    output.append(['', '', '', f"{trans('shopping_total_suggestion_price', default='Total Suggestion Price')}: {utils.format_currency(total_suggestion_price)}", '', ''])
-
+    output.append([trans('general_date', default='Date'), trans('investor_report_title', default='Report Title'), trans('investor_report_metrics', default='Key Metrics')])
+    for r in reports:
+        metrics_summary = ', '.join([f"{k}: {utils.format_currency(v)}" if isinstance(v, (int, float)) else f"{k}: {v}" for k, v in r['financial_metrics'].items()])
+        output.append([utils.format_date(r['created_at']), r['title'], metrics_summary])
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
-    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=shopping_report.csv'})
+    return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=investor_reports.csv'})
 
 def generate_customer_report_pdf(report_data):
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
-    # Page setup
     header_height = 0.7
     extra_space = 0.2
     row_height = 0.2
@@ -1281,17 +879,14 @@ def generate_customer_report_pdf(report_data):
     def draw_table_headers(y):
         p.setFillColor(colors.black)
         headers = [
-            'Username', 'Email', 'Role', 'Credits', 'Lang',
-            'Income', 'Fixed Exp', 'Var Exp', 'Surplus',
-            'Pending Bills', 'Paid Bills', 'Overdue Bills',
-            'Lessons', 'Tax Due', 'Tax Amt'
+            'Username', 'Email', 'Role', 'Trial', 'Trial End', 'Subscribed',
+            'Debtors', 'Creditors', 'Receipts', 'Payments', 'Latest Fund', 'Latest Forecast'
         ]
-        x_positions = [0.5 * inch + i * 0.3 * inch for i in range(len(headers))]
+        x_positions = [0.5 * inch + i * 0.5 * inch for i in range(len(headers))]
         for header, x in zip(headers, x_positions):
             p.drawString(x, y * inch, header)
         return y - row_height, x_positions
 
-    # Initialize first page
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 8)
     p.drawString(0.5 * inch, title_y * inch, trans('reports_customer_report', default='Customer Report'))
@@ -1309,10 +904,18 @@ def generate_customer_report_pdf(report_data):
             row_count = 0
 
         values = [
-            data['username'], data['email'], data['role'], str(data['ficore_credit_balance']), data['language'],
-            str(data['budget_income']), str(data['budget_fixed_expenses']), str(data['budget_variable_expenses']), str(data['budget_surplus_deficit']),
-            str(data['pending_bills']), str(data['paid_bills']), str(data['overdue_bills']),
-            str(data['lessons_completed']), data['next_tax_due_date'], str(data['next_tax_amount'])
+            data['username'][:15],
+            data['email'][:15],
+            data['role'],
+            str(data['is_trial']),
+            data['trial_end'],
+            str(data['is_subscribed']),
+            utils.format_currency(data['total_debtors']),
+            utils.format_currency(data['total_creditors']),
+            utils.format_currency(data['total_receipts']),
+            utils.format_currency(data['total_payments']),
+            str(data['latest_fund_amount']),
+            str(data['latest_forecast_revenue'])
         ]
         for value, x in zip(values, x_positions):
             p.drawString(x, y * inch, str(value)[:15])
@@ -1327,18 +930,17 @@ def generate_customer_report_csv(report_data):
     output = []
     output.extend(ficore_csv_header(current_user))
     headers = [
-        'Username', 'Email', 'Role', 'Ficore Credit Balance', 'Language',
-        'Budget Income', 'Budget Fixed Expenses', 'Budget Variable Expenses', 'Budget Surplus/Deficit',
-        'Pending Bills', 'Paid Bills', 'Overdue Bills',
-        'Lessons Completed', 'Next Tax Due Date', 'Next Tax Amount'
+        'Username', 'Email', 'Role', 'Is Trial', 'Trial End', 'Is Subscribed',
+        'Total Debtors', 'Total Creditors', 'Total Receipts', 'Total Payments',
+        'Latest Fund Amount', 'Latest Forecast Revenue'
     ]
     output.append(headers)
     for data in report_data:
         row = [
-            data['username'], data['email'], data['role'], data['ficore_credit_balance'], data['language'],
-            data['budget_income'], data['budget_fixed_expenses'], data['budget_variable_expenses'], data['budget_surplus_deficit'],
-            data['pending_bills'], data['paid_bills'], data['overdue_bills'],
-            data['lessons_completed'], data['next_tax_due_date'], data['next_tax_amount']
+            data['username'], data['email'], data['role'], data['is_trial'], data['trial_end'], data['is_subscribed'],
+            utils.format_currency(data['total_debtors']), utils.format_currency(data['total_creditors']),
+            utils.format_currency(data['total_receipts']), utils.format_currency(data['total_payments']),
+            data['latest_fund_amount'], data['latest_forecast_revenue']
         ]
         output.append(row)
     buffer = StringIO()
