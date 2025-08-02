@@ -171,6 +171,18 @@
                 {% endif %}
             {% endfor %}
         </div>
+
+        <!-- Promotion Section -->
+        <section class="section-card promotion-card">
+            <div class="promotion-content">
+                <img src="/static/img/promotion_banner.png" alt="{{ t('general_special_offer', default='Special Offer') | e }}" class="promotion-image">
+                <div class="promotion-text">
+                    <h4>{{ t('general_special_announcement_title', default='Special Announcement!') | e }}</h4>
+                    <p>{{ t('general_special_announcement_description', default='Gain exclusive insights to optimize your business finances today!') | e }}</p>
+                    <a href="{{ url_for('general_bp.business_finance_tips') | e }}" class="btn btn-sm btn-outline-light">{{ t('general_learn_more', default='Learn More') | e }}</a>
+                </div>
+            </div>
+        </section>
     {% endif %}
 </div>
 
@@ -184,6 +196,10 @@
 .notification-time { font-size: 0.8rem; }
 .quick-action-card.disabled { opacity: 0.5; pointer-events: none; }
 .explore-card.disabled { opacity: 0.5; pointer-events: none; }
+.promotion-card { padding: 1.5rem; background: #f8f9fa; border-radius: 0.5rem; }
+.promotion-content { display: flex; align-items: center; gap: 1rem; }
+.promotion-image { width: 100px; height: 100px; object-fit: cover; border-radius: 0.25rem; }
+.promotion-text { flex-grow: 1; }
 </style>
 {% endblock %}
 
@@ -440,7 +456,7 @@ function getActivityIcon(type) {
 }
 
 function getActivityColor(type) {
-    const colors = {
+    const icons = {
         'debt_added': 'text-primary',
         'debt_settled': 'text-success',
         'money_in': 'text-success',
@@ -448,7 +464,7 @@ function getActivityColor(type) {
         'reminder_sent': 'text-warning',
         'trader_registered': 'text-primary'
     };
-    return colors[type] || 'text-muted';
+    return icons[type] || 'text-muted';
 }
 
 function getNotificationIcon(type) {
