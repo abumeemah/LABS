@@ -1,4 +1,3 @@
-```python
 from flask import Blueprint, render_template, redirect, url_for, flash, session, request, jsonify, make_response
 from flask_login import login_required, current_user
 from translations import trans
@@ -198,4 +197,3 @@ def feedback():
                 return render_template('personal/GENERAL/error.html', error=str(e), title=trans('general_feedback', lang=lang)), 500
     # Handle GET request
     return render_template('general/feedback.html', tool_options=tool_options, title=trans('general_feedback', lang=lang))
-```
