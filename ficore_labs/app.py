@@ -340,7 +340,6 @@ def create_app():
         WAITLIST_FORM_URL=app.config.get('WAITLIST_FORM_URL', '#'),
         CONSULTANCY_FORM_URL=app.config.get('CONSULTANCY_FORM_URL', '#'),
         trans=trans,
-        trans_function=trans_function,
         get_translations=get_translations,
         is_admin=lambda: current_user.is_admin if current_user.is_authenticated else False
     )
