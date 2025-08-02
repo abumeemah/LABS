@@ -23,10 +23,8 @@ from flask_limiter.util import get_remote_address
 from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
     UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
-    trans_function, get_translations
-)
-from translations import trans, register_translation
-
+    )
+from translations import register_translation, trans, get_translations, get_all_translations, get_module_translations
 
 # Load environment variables
 load_dotenv()
