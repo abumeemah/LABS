@@ -29,27 +29,21 @@ logger = SessionAdapter(root_logger, {})
 logged_missing_keys = set()
 lock = threading.Lock()
 
-# Import translation modules
+# Import translation modules for core business finance
 try:
-    # Personal Finance Tools
-    from .personal_finance.bill_translations import BILL_TRANSLATIONS
-    from .personal_finance.budget_translations import BUDGET_TRANSLATIONS
-    from .personal_finance.shopping_translations import SHOPPING_TRANSLATIONS
-    from .personal_finance.food_order_translations import FOOD_ORDER_TRANSLATIONS
+    # Business Tools (under trader and startup)
+    from .trader.creditors_translations import CREDITORS_TRANSLATIONS
+    from .trader.debtors_translations import DEBTORS_TRANSLATIONS
+    from .trader.payments_translations import PAYMENTS_TRANSLATIONS
+    from .trader.receipts_translations import RECEIPTS_TRANSLATIONS
+    from .startup.funds_translations import FUNDS_TRANSLATIONS
+    from .startup.investor_reports_translations import INVESTOR_REPORTS_TRANSLATIONS
+    from .startup.forecasts_translations import FORECASTS_TRANSLATIONS
+    from .admin_translations import ADMIN_TRANSLATIONS
     
-    # Accounting Tools
-    from .accounting_tools.admin_translations import ADMIN_TRANSLATIONS
-    from .accounting_tools.agents_translations import AGENTS_TRANSLATIONS
-    from .accounting_tools.ficore_credits_translations import FICORE_CREDITS_TRANSLATIONS
-    from .accounting_tools.creditors_translations import CREDITORS_TRANSLATIONS
-    from .accounting_tools.debtors_translations import DEBTORS_TRANSLATIONS
-    from .accounting_tools.payments_translations import PAYMENTS_TRANSLATIONS
-    from .accounting_tools.receipts_translations import RECEIPTS_TRANSLATIONS
-    from .accounting_tools.reports_translations import REPORTS_TRANSLATIONS
-    
-    # General Tools
-    from .general_tools.general_translations import GENERAL_TRANSLATIONS
-    from .general_tools.tax_translations import TAX_TRANSLATIONS
+    # General Features
+    from .general_features.general_translations import GENERAL_TRANSLATIONS
+    from .general_features.admin_translations import ADMIN_TRANSLATIONS
     
 except ImportError as e:
     logger.error(f"Failed to import translation module: {str(e)}", exc_info=True)
@@ -57,56 +51,34 @@ except ImportError as e:
 
 # Map module names to translation dictionaries
 translation_modules = {
-    # Personal Finance
-    'bill': BILL_TRANSLATIONS,
-    'budget': BUDGET_TRANSLATIONS,
-    'shopping': SHOPPING_TRANSLATIONS,
-    'food_order': FOOD_ORDER_TRANSLATIONS,
-    
-    # Accounting Tools
-    'admin': ADMIN_TRANSLATIONS,
-    'agents': AGENTS_TRANSLATIONS,
-    'credits': FICORE_CREDITS_TRANSLATIONS,
+    # Business Tools
     'creditors': CREDITORS_TRANSLATIONS,
     'debtors': DEBTORS_TRANSLATIONS,
     'payments': PAYMENTS_TRANSLATIONS,
     'receipts': RECEIPTS_TRANSLATIONS,
-    'reports': REPORTS_TRANSLATIONS,
+    'funds': FUNDS_TRANSLATIONS,
+    'investor_reports': INVESTOR_REPORTS_TRANSLATIONS,
+    'forecasts': FORECASTS_TRANSLATIONS,
+    'admin': ADMIN_TRANSLATIONS,
     
-    # General Tools
+    # General Features
     'general': GENERAL_TRANSLATIONS,
-    'tax': TAX_TRANSLATIONS,
 }
 
 # Map key prefixes to module names
 KEY_PREFIX_TO_MODULE = {
-    # Personal Finance prefixes
-    'bill_': 'bill',
-    'budget_': 'budget',
-    'shopping_': 'shopping',
-    'food_order_': 'food_order',
-    
-    # Accounting Tools prefixes
-    'admin_': 'admin',
-    'agents_': 'agents',
-    'credits_': 'credits',
+    # Business Tools prefixes
     'creditors_': 'creditors',
     'debtors_': 'debtors',
     'payments_': 'payments',
     'receipts_': 'receipts',
-    'reports_': 'reports',
+    'funds_': 'funds',
+    'investor_reports_': 'investor_reports',
+    'forecasts_': 'forecasts',
+    'admin_': 'admin',
     
-    # General Tools prefixes
+    # General Features prefixes
     'general_': 'general',
-    'notifications_': 'tax',
-    'search_': 'tax',
-    'filter_': 'tax',
-    'export_': 'tax',
-    'api_': 'tax',
-    'tax_': 'tax',
-    'backup_': 'tax',
-    'maintenance_': 'tax',
-    'webhook_': 'tax',
 }
 
 # General-specific keys without prefixes (common navigation and UI elements)
@@ -131,7 +103,7 @@ def trans(key: str, lang: Optional[str] = None, default: Optional[str] = None, *
     Translate a key using the appropriate module's translation dictionary.
     
     Args:
-        key: The translation key (e.g., 'bill_submit', 'general_welcome').
+        key: The translation key (e.g., 'funds_title', 'general_welcome').
         lang: Language code ('en', 'ha'). Defaults to session['lang'] or 'en'.
         default: Default string to use if translation is missing. Defaults to None (returns key).
         **kwargs: String formatting parameters for the translated string.
@@ -139,13 +111,6 @@ def trans(key: str, lang: Optional[str] = None, default: Optional[str] = None, *
     Returns:
         The translated string, falling back to English, default, or the key itself if missing.
         Applies string formatting with kwargs if provided, with fallback for missing keys.
-    
-    Notes:
-        - Uses session['lang'] if lang is None and request context exists.
-        - Logs warnings for missing translations only once per key.
-        - Logs errors for formatting failures but returns unformatted string as fallback.
-        - Uses g.logger if available, else the default logger.
-        - Checks general translations for common UI elements without prefixes.
     """
     current_logger = g.get('logger', logger) if has_request_context() else logger
     session_id = session.get('sid', 'no-session-id') if has_request_context() else 'no-session-id'
@@ -251,7 +216,7 @@ def get_module_translations(module_name: str, lang: Optional[str] = None) -> Dic
     Get translations for a specific module and language.
     
     Args:
-        module_name: Name of the translation module (e.g., 'general', 'bill').
+        module_name: Name of the translation module (e.g., 'general', 'funds').
         lang: Language code ('en', 'ha'). Defaults to session['lang'] or 'en'.
     
     Returns:
