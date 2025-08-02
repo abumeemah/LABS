@@ -13,7 +13,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from io import BytesIO
 import csv
-from models import get_records, get_cashflows
+from models import get_records, get_cashflows, get_feedback, to_dict_feedback
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,22 @@ class FundForm(FlaskForm):
     received_date = DateField(trans('fund_received_date', default='Received Date'), validators=[DataRequired()], format='%Y-%m-%d', render_kw={'class': 'form-control'})
     submit = SubmitField(trans('fund_add', default='Add Fund'), render_kw={'class': 'btn btn-primary'})
 
+class FeedbackFilterForm(FlaskForm):
+    tool_name = SelectField(trans('general_select_tool', default='Select Tool'), 
+                           choices=[('', trans('general_all_tools', default='All Tools')),
+                                    ('profile', trans('general_profile', default='Profile')),
+                                    ('debtors', trans('debtors_dashboard', default='Debtors')),
+                                    ('creditors', trans('creditors_dashboard', default='Creditors')),
+                                    ('receipts', trans('receipts_dashboard', default='Receipts')),
+                                    ('payment', trans('payments_dashboard', default='Payments')),
+                                    ('report', trans('reports_dashboard', default='Business Reports')),
+                                    ('fund', trans('fund_tracking', default='Fund Tracking')),
+                                    ('investor_report', trans('investor_reports', default='Investor Reports')),
+                                    ('forecast', trans('forecast_scenario', default='Forecast & Scenario'))],
+                           validators=[validators.Optional()], render_kw={'class': 'form-select'})
+    user_id = StringField(trans('admin_user_id', default='User ID'), validators=[validators.Optional()], render_kw={'class': 'form-control'})
+    submit = SubmitField(trans('general_filter', default='Filter'), render_kw={'class': 'btn btn-primary'})
+
 # Helper Functions
 def log_audit_action(action, details=None):
     """Log an admin action to audit_logs collection."""
@@ -79,7 +95,8 @@ def dashboard():
             'debtors': db.debtors.count_documents({}),
             'creditors': db.creditors.count_documents({}),
             'funds': db.funds.count_documents({}),
-            'audit_logs': db.audit_logs.count_documents({})
+            'audit_logs': db.audit_logs.count_documents({}),
+            'feedback': db.feedback.count_documents({})
         }
         recent_users = list(db.users.find().sort('created_at', -1).limit(5))
         for user in recent_users:
@@ -168,6 +185,7 @@ def delete_user(user_id):
         db.debtors.delete_many({'user_id': user_id})
         db.creditors.delete_many({'user_id': user_id})
         db.funds.delete_many({'user_id': user_id})
+        db.feedback.delete_many({'user_id': user_id})
         db.audit_logs.delete_many({'details.user_id': user_id})
         result = db.users.delete_one(user_query)
         if result.deleted_count == 0:
@@ -317,6 +335,40 @@ def audit():
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('admin/audit.html', logs=[])
+
+@admin_bp.route('/feedback', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_feedback():
+    """View and filter user feedback."""
+    try:
+        db = utils.get_mongo_db()
+        form = FeedbackFilterForm()
+        filter_kwargs = {}
+        
+        if request.method == 'POST' and form.validate_on_submit():
+            if form.tool_name.data:
+                filter_kwargs['tool_name'] = form.tool_name.data
+            if form.user_id.data:
+                filter_kwargs['user_id'] = form.user_id.data
+        
+        feedback_list = [to_dict_feedback(fb) for fb in get_feedback(db, filter_kwargs)]
+        for feedback in feedback_list:
+            feedback['id'] = str(feedback['id'])
+            feedback['timestamp'] = feedback['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if feedback['timestamp'] else ''
+        
+        return render_template(
+            'admin/feedback.html',
+            form=form,
+            feedback_list=feedback_list,
+            title=trans('admin_feedback_title', default='Manage Feedback')
+        )
+    except Exception as e:
+        logger.error(f"Error fetching feedback for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('admin/feedback.html', form=form, feedback_list=[]), 500
 
 @admin_bp.route('/debtors', methods=['GET', 'POST'])
 @login_required
