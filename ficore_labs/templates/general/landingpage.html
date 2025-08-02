@@ -3,25 +3,15 @@
 
 {% block content %}
 <div class="container">
-    <!-- Welcome Section -->
-    <div class="section-card welcome-section-card text-center">
-        <h1 class="section-title">{{ t('general_welcome', default='Welcome to Business Finance') | e }}</h1>
-        <p class="text-muted">{{ t('general_business_finance_desc', default='Nigeria\'s leading platform for personal finance, business management, and agent services, tailored for you.') | e }}</p>
-        
-        <!-- Initial Get Started Button -->
-        <div id="initial-cta" class="mb-3">
-            <button id="get-started-btn" class="btn btn-primary btn-lg" type="button" data-bs-toggle="collapse" data-bs-target="#auth-options" aria-expanded="false" aria-controls="auth-options" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">
-                {{ t('general_get_started', default='Get Started') | e }}
-                <i class="bi bi-chevron-down ms-2"></i>
-            </button>
-        </div>
-
-        <!-- Auth Options -->
-        <div id="auth-options" class="btn-group btn-group-vertical d-md-flex mb-3 collapse">
-            <a href="{{ url_for('users.signup') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_tooltip', default='Create your Business Finance account') | e }}">
+    <!-- Hero Section -->
+    <div class="section-card welcome-section-card text-center mt-5">
+        <h1 class="section-title display-4 fw-bold">{{ t('general_welcome', default='Welcome to Business Finance') | e }}</h1>
+        <p class="lead text-muted mb-4">{{ t('general_business_finance_desc', default='Nigeria\'s leading platform for personal finance, business management, and agent services, tailored for you.') | e }}</p>
+        <div class="btn-group btn-group-vertical d-md-flex mb-4">
+            <a href="{{ url_for('users.signup') }}" class="btn btn-primary btn-lg mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_tooltip', default='Create your Business Finance account') | e }}">
                 <i class="bi bi-person-plus me-2"></i>{{ t('general_signup', default='Sign Up') | e }}
             </a>
-            <a href="{{ url_for('users.login') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}">
+            <a href="{{ url_for('users.login') }}" class="btn btn-outline-primary btn-lg mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}">
                 <i class="bi bi-box-arrow-in-right me-2"></i>{{ t('general_login', default='Log In') | e }}
             </a>
         </div>
@@ -146,7 +136,7 @@
                 </div>
             </div>
             <div class="text-center mt-4">
-                <span class="animated-counter display-5 fw-bold text-primary" data-count="0">0</span>
+                <span class="animated-counter display-5 fw-bold text-primary" data-count="10000">10,000</span>
                 <span class="fs-5">{{ t('general_users_served', default='Users Served') | e }}</span>
             </div>
         </div>
@@ -161,21 +151,21 @@
                     <div class="testimonial text-center">
                         <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="MU">
                         <p class="text-muted">{{ t('general_impressed_features', default='Business Finance’s budgeting and bill tracking tools are intuitive and perfect for managing my personal finances!') | e }}</p>
-                        <p class="name fw-bold">User, {{ t('general_personal_user', default='Personal User') | e }}</p>
+                        <p class="name fw-bold">Musa, {{ t('general_personal_user', default='Personal User') | e }}</p>
                     </div>
                 </div>
                 <div class="carousel-item">
                     <div class="testimonial text-center">
                         <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="AA">
                         <p class="text-muted">{{ t('general_business_finance_praise', default='Managing my business’s debtors, creditors, and reports has never been easier!') | e }}</p>
-                        <p class="name fw-bold">User, {{ t('general_business_owner', default='Business Owner') | e }}</p>
+                        <p class="name fw-bold">Aisha, {{ t('general_business_owner', default='Business Owner') | e }}</p>
                     </div>
                 </div>
                 <div class="carousel-item">
                     <div class="testimonial text-center">
                         <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="ASU">
                         <p class="text-muted">{{ t('general_potential_support', default='As an agent, Business Finance makes onboarding traders and managing operations seamless and efficient.') | e }}</p>
-                        <p class="name fw-bold">User, {{ t('general_agent', default='Agent') | e }}</p>
+                        <p class="name fw-bold">Sani, {{ t('general_agent', default='Agent') | e }}</p>
                     </div>
                 </div>
             </div>
@@ -189,7 +179,7 @@
             </button>
         </div>
         <div class="text-center mt-4">
-            <a href="{{ url_for('general_bp.about') | e }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip" data-bs-title="{{ t('general_about_business_finance_tooltip', default='Learn more about Business Finance') | e }}">{{ t('general_about_business_finance', default='Learn More About Us') | e }}</a>
+            <a href="{{ url_for('general_bp.about') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip" data-bs-title="{{ t('general_about_business_finance_tooltip', default='Learn more about Business Finance') | e }}">{{ t('general_about_business_finance', default='Learn More About Us') | e }}</a>
         </div>
     </div>
 
@@ -266,11 +256,8 @@
         <h3 class="section-title">{{ t('general_ready_to_start', default='Ready to Take Control of Your Finances?') | e }}</h3>
         <p class="text-muted">{{ t('general_signup_prompt', default='Sign up today to access tools for personal finance, business management, or agent services.') | e }}</p>
         <div class="btn-group btn-group-vertical d-md-flex mb-3">
-            <a href="{{ url_for('users.signup') }}" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">{{ t('general_get_started', default='Get Started') | e }}</a>
-            <a href="{{ url_for('users.signup') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_personal_tooltip', default='Sign up for personal finance tools') | e }}">{{ t('general_signup_personal', default='Personal Sign Up') | e }}</a>
-            <a href="{{ url_for('users.signup') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_business_tooltip', default='Sign up for business management tools') | e }}">{{ t('general_signup_business', default='Business Sign Up') | e }}</a>
-            <a href="{{ url_for('users.signup') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_signup_agent_tooltip', default='Sign up for agent services') | e }}">{{ t('general_signup_agent', default='Agent Sign Up') | e }}</a>
-            <a href="{{ url_for('users.login') }}" class="btn btn-outline-primary" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}">{{ t('general_login', default='Log In') | e }}</a>
+            <a href="{{ url_for('users.signup') }}" class="btn btn-primary mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">{{ t('general_get_started', default='Get Started') | e }}</a>
+            <a href="{{ url_for('users.login') }}" class="btn btn-outline-primary mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}">{{ t('general_login', default='Log In') | e }}</a>
         </div>
     </div>
 </div>
@@ -284,7 +271,7 @@
     margin-bottom: 1.5rem;
 }
 .welcome-section-card {
-    margin-top: 5rem;
+    margin-top: 3rem;
 }
 .section-title {
     font-size: 1.75rem;
@@ -323,6 +310,21 @@
 }
 [data-bs-toggle="tooltip"] {
     z-index: 1000;
+}
+.avatar-circle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.gradient-bg {
+    background: linear-gradient(135deg, #007bff, #6610f2);
+}
+.carousel-item {
+    padding: 1rem;
+}
+.why-item {
+    padding: 1rem;
 }
 </style>
 
@@ -372,23 +374,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const counter = document.querySelector('.animated-counter');
     if (counter) {
         const target = parseInt(counter.getAttribute('data-count')) || 0;
-        if (target > 0) {
-            let current = 0;
-            const increment = Math.ceil(target / 100);
-            const updateCounter = () => {
-                current += increment;
-                if (current >= target) {
-                    current = target;
-                    counter.textContent = current.toLocaleString();
-                    clearInterval(counterInterval);
-                } else {
-                    counter.textContent = current.toLocaleString();
-                }
-            };
-            const counterInterval = setInterval(updateCounter, 50);
-        } else {
-            counter.textContent = '0';
-        }
+        let current = 0;
+        const increment = Math.ceil(target / 100);
+        const updateCounter = () => {
+            current += increment;
+            if (current >= target) {
+                current = target;
+                counter.textContent = current.toLocaleString();
+                clearInterval(counterInterval);
+            } else {
+                counter.textContent = current.toLocaleString();
+            }
+        };
+        const counterInterval = setInterval(updateCounter, 50);
     }
 
     // Navbar touch handling
