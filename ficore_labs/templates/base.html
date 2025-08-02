@@ -505,7 +505,7 @@
                 return;
             }
             try {
-                const endpoint = '{{ url_for("notifications.list") | e }}';
+                const endpoint = '{{ url_for("notifications.count") | e }}';
                 if (!endpoint) {
                     body.innerHTML = `
                         <div class="notification-card">
