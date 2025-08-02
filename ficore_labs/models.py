@@ -91,6 +91,9 @@ def initialize_app_data(app):
                                         'industry': {'bsonType': 'string'},
                                         'products_services': {'bsonType': 'string'},
                                         'phone_number': {'bsonType': 'string'}
+                                'subscription_plan': {'bsonType': ['string', 'null'], 'enum': [None, 'monthly', 'yearly']},
+                                'subscription_start': {'bsonType': ['date', 'null']},
+                                'subscription_end': {'bsonType': ['date', 'null']}
                                     }
                                 }
                             }
