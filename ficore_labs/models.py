@@ -241,6 +241,27 @@ def initialize_app_data(app):
                         {'key': [('tool_name', ASCENDING)]},
                         {'key': [('timestamp', DESCENDING)]}
                     ]
+                },
+                'notifications': {
+                    'validator': {
+                        '$jsonSchema': {
+                            'bsonType': 'object',
+                            'required': ['user_id', 'message', 'type', 'read', 'timestamp'],
+                            'properties': {
+                                '_id': {'bsonType': 'objectId'},
+                                'user_id': {'bsonType': 'string'},
+                                'message': {'bsonType': 'string'},
+                                'type': {'enum': ['info', 'warning', 'error', 'success', 'email', 'sms', 'whatsapp']},
+                                'read': {'bsonType': 'bool'},
+                                'timestamp': {'bsonType': 'date'},
+                                'details': {'bsonType': ['object', 'null']}
+                            }
+                        }
+                    },
+                    'indexes': [
+                        {'key': [('user_id', ASCENDING), ('read', ASCENDING)]},
+                        {'key': [('timestamp', DESCENDING)]}
+                    ]
                 }
             }
                 
