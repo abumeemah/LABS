@@ -17,27 +17,6 @@
         </div>
     </div>
 
-    <!-- Notifications Placeholder (Unauthenticated) -->
-    <div class="section-card notifications mt-5">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="section-title mb-0">{{ t('general_notifications', default='Notifications') | e }}</h3>
-            <a href="{{ url_for('users.signup') }}" class="btn btn-link btn-sm p-0 text-decoration-none">{{ t('general_signup_to_view_notifications', default='Sign Up to View Notifications') | e }}</a>
-        </div>
-        <div id="notificationList">
-            <div class="notification-card">
-                <div class="notification-item">
-                    <div class="notification-icon">
-                        <i class="bi bi-info-circle text-muted"></i>
-                    </div>
-                    <div class="notification-content">
-                        <div class="notification-description fw-semibold">{{ t('general_notifications_unavailable', default='Notifications available after signing up') | e }}</div>
-                        <div class="notification-time text-muted">{{ t('general_check_back_later', default='Check back later') | e }}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Who We Serve -->
     <div class="section-card mt-5">
         <h3 class="section-title">{{ t('general_who_we_serve', default='Who We Serve') | e }}</h3>
@@ -286,28 +265,6 @@
 .card:hover {
     transform: translateY(-5px);
 }
-.notification-card {
-    border-bottom: 1px solid #e9ecef;
-    padding: 0.75rem 0;
-}
-.notification-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-.notification-icon {
-    font-size: 1.25rem;
-}
-.notification-content {
-    flex-grow: 1;
-}
-.notification-description {
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-.notification-time {
-    font-size: 0.8rem;
-}
 [data-bs-toggle="tooltip"] {
     z-index: 1000;
 }
@@ -333,9 +290,7 @@
     'just_now': t('general_just_now', default='Just now') | e,
     'minutes_ago': t('general_minutes_ago', default='m ago') | e,
     'hours_ago': t('general_hours_ago', default='h ago') | e,
-    'days_ago': t('general_days_ago', default='d ago') | e,
-    'no_notifications': t('general_no_notifications', default='No notifications') | e,
-    'check_back_later': t('general_check_back_later', default='Check back later') | e
+    'days_ago': t('general_days_ago', default='d ago') | e
 } %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" integrity="sha384-XGjxtQfXaH2tnPFa9x+ruJTuLE3Aa6LhHSWRr1XeTyhezb4abCG4ccI5AkVDxqC+" crossorigin="anonymous">
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
