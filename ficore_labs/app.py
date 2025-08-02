@@ -58,7 +58,7 @@ def custom_login_required(f):
             return redirect(url_for('users.login', next=request.url))
         if not current_user.is_trial_active():
             logger.info(f"User {current_user.id} trial expired, redirecting to subscription")
-            return redirect(url_for('subscribe.subscription_required'))
+            return redirect(url_for('subscribe_bp.subscribe'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -419,7 +419,7 @@ def create_app():
 
     @app.before_request
     def check_session_timeout():
-        if request.path.startswith('/static/') or request.path == url_for('subscribe.subscription_required'):
+        if request.path.startswith('/static/') or request.path == url_for('subscribe_bp.subscribe'):
             return
         if current_user.is_authenticated and 'last_activity' in session:
             last_activity = session.get('last_activity')
