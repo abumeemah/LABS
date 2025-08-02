@@ -34,7 +34,7 @@
                     <span class="greeting-text">{{ t('general_hi_user', default='Hi') | e }}, {{ current_user.display_name | default(current_user.id) | e }}</span>
                 </a>
             {% else %}
-                <a class="navbar-brand" href="{{ url_for('general_bp.index') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
+                <a class="navbar-brand" href="{{ url_for('general_bp.home') | e }}" aria-label="{{ t('general_app_title', default='Business Finance') | e }}">
                     <img src="{{ url_for('static', filename='img/logo.png') | e }}" alt="{{ t('general_app_logo', default='Business Finance Logo') | e }}" class="app-logo">
                     <span class="brand-text">{{ t('general_app_title', default='Business Finance') | e }}</span>
                 </a>
