@@ -23,7 +23,7 @@ from flask_limiter.util import get_remote_address
 from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
     UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
-    )
+)
 from translations import register_translation, trans, get_translations, get_all_translations, get_module_translations
 
 # Load environment variables
@@ -234,7 +234,7 @@ def create_app():
     # Add URL generation configurations to fix BuildError
     app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'ficore-labs-records.onrender.com')
     app.config['APPLICATION_ROOT'] = os.getenv('APPLICATION_ROOT', '/')
-    app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'https')  
+    app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'https')
 
     # Initialize MongoDB
     try:
@@ -298,9 +298,6 @@ def create_app():
         logger.error(f'Error in database initialization: {str(e)}')
         raise
 
-    # Initialize tools and navigation
-    initialize_tools_with_urls(app)
-
     # Register blueprints
     from users.routes import users_bp
     from debtors.routes import debtors_bp
@@ -330,6 +327,17 @@ def create_app():
     app.register_blueprint(general_bp, url_prefix='/general')
     app.register_blueprint(business, url_prefix='/business')
     logger.info('Registered core business finance blueprints')
+
+    # Initialize tools and navigation after blueprints
+    @app.before_first_request
+    def initialize_navigation():
+        with app.app_context():
+            try:
+                initialize_tools_with_urls(app)
+                logger.info('Navigation initialized after blueprint registration')
+            except Exception as e:
+                logger.error(f'Failed to initialize navigation: {str(e)}')
+                raise
 
     # Set up Jinja globals
     app.jinja_env.globals.update(
