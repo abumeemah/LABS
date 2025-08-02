@@ -24,7 +24,7 @@ from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
     UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV
 )
-from translations import trans
+from translations import trans, register_translation
 
 # Load environment variables
 load_dotenv()
@@ -258,6 +258,9 @@ def create_app():
     babel.init_app(app)
     login_manager.init_app(app)
     login_manager.login_view = 'users.login'
+
+    # Register translation function
+    register_translation(app)
 
     # User loader
     @login_manager.user_loader
