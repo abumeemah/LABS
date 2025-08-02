@@ -20,7 +20,10 @@ from flask_babel import Babel
 from flask_compress import Compress
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from utils import get_mongo_db, logger, initialize_tools_with_urls
+from utils import (
+    get_mongo_db, logger, initialize_tools_with_urls,
+    UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV
+)
 
 # Load environment variables
 load_dotenv()
@@ -223,6 +226,11 @@ def create_app():
         logger.error('MONGO_URI environment variable is not set')
         raise ValueError('MONGO_URI must be set')
 
+    # Add URL generation configurations to fix BuildError
+    app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'localhost:5000')  # Default for development
+    app.config['APPLICATION_ROOT'] = os.getenv('APPLICATION_ROOT', '/')
+    app.config['PREFERRED_URL_SCHEME'] = os.getenv('PREFERRED_URL_SCHEME', 'http')  # Use 'https' in production
+
     # Initialize MongoDB
     try:
         client = MongoClient(
@@ -343,7 +351,19 @@ def create_app():
             'available_languages': [
                 {'code': 'en', 'name': 'English'},
                 {'code': 'ha', 'name': 'Hausa'}
-            ]
+            ],
+            'navigation': (
+                ADMIN_NAV if current_user.is_authenticated and current_user.role == 'admin'
+                else STARTUP_NAV if current_user.is_authenticated and current_user.role == 'startup'
+                else TRADER_NAV if current_user.is_authenticated and current_user.role == 'trader'
+                else UNAUTHENTICATED_NAV
+            ),
+            'tools': (
+                ADMIN_TOOLS if current_user.is_authenticated and current_user.role == 'admin'
+                else STARTUP_TOOLS if current_user.is_authenticated and current_user.role == 'startup'
+                else TRADER_TOOLS if current_user.is_authenticated and current_user.role == 'trader'
+                else []
+            )
         }
 
     # Routes
