@@ -39,7 +39,8 @@ def index():
         return render_template(
             'investor_reports/index.html',
             reports=reports,
-            title=trans('investor_reports_index', default='Investor Reports', lang=session.get('lang', 'en'))
+            title=trans('investor_reports_index', default='Investor Reports', lang=session.get('lang', 'en')),
+            can_interact=utils.can_user_interact(current_user)
         )
     except Exception as e:
         logger.error(f"Error fetching investor reports for user {current_user.id}: {str(e)}")
@@ -59,7 +60,8 @@ def manage():
         return render_template(
             'investor_reports/manage_reports.html',
             reports=reports,
-            title=trans('investor_reports_manage', default='Manage Investor Reports', lang=session.get('lang', 'en'))
+            title=trans('investor_reports_manage', default='Manage Investor Reports', lang=session.get('lang', 'en')),
+            can_interact=utils.can_user_interact(current_user)
         )
     except Exception as e:
         logger.error(f"Error fetching investor reports for manage page for user {current_user.id}: {str(e)}")
@@ -103,7 +105,8 @@ def view_page(id):
         return render_template(
             'investor_reports/view.html',
             report=report,
-            title=trans('investor_reports_details', default='Investor Report Details', lang=session.get('lang', 'en'))
+            title=trans('investor_reports_details', default='Investor Report Details', lang=session.get('lang', 'en')),
+            can_interact=utils.can_user_interact(current_user)
         )
     except Exception as e:
         logger.error(f"Error rendering investor report view page {id} for user {current_user.id}: {str(e)}")
@@ -115,6 +118,10 @@ def view_page(id):
 @utils.requires_role('startup')
 def generate_report(id):
     """Generate PDF report for an investor report."""
+    if not utils.can_user_interact(current_user):
+        flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
+        return redirect(url_for('general_bp.subscription_required'))
+    
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'investor_report'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
@@ -123,10 +130,6 @@ def generate_report(id):
         if not report:
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('investor_reports.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('investor_reports_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -157,17 +160,6 @@ def generate_report(id):
         p.showPage()
         p.save()
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Investor report generated for {report['title']}"
-            })
-        
         buffer.seek(0)
         return Response(
             buffer.getvalue(),
@@ -187,6 +179,10 @@ def generate_report(id):
 @utils.requires_role('startup')
 def generate_report_csv(id):
     """Generate CSV report for an investor report."""
+    if not utils.can_user_interact(current_user):
+        flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
+        return redirect(url_for('general_bp.subscription_required'))
+    
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'investor_report'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
@@ -195,10 +191,6 @@ def generate_report_csv(id):
         if not report:
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('investor_reports.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('investor_reports_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         output = []
         output.extend(ficore_csv_header(current_user))
@@ -211,17 +203,6 @@ def generate_report_csv(id):
         output.append([trans('investor_reports_date_recorded', default='Date Recorded'), utils.format_date(report['created_at'])])
         output.append([''])
         output.append([trans('investor_reports_report_footer', default='This document serves as an investor report recorded on FiCore Records.')])
-        
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Investor report CSV generated for {report['title']}"
-            })
         
         buffer = io.BytesIO()
         writer = csv.writer(buffer, lineterminator='\n')
@@ -246,11 +227,11 @@ def generate_report_csv(id):
 @utils.requires_role('startup')
 def add():
     """Add a new investor report."""
-    form = InvestorReportForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('investor_reports_insufficient_credits', default='Insufficient Ficore Credits to add report'), 'danger')
-        return redirect(url_for('agents_bp.manage_credits'))
+    if not utils.can_user_interact(current_user):
+        flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
+        return redirect(url_for('general_bp.subscription_required'))
 
+    form = InvestorReportForm()
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
@@ -265,17 +246,6 @@ def add():
             }
             db.records.insert_one(report_data)
             
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"Investor report added: {form.title.data}"
-                })
-            
             flash(trans('investor_reports_add_success', default='Investor report added successfully'), 'success')
             return redirect(url_for('investor_reports.index'))
         except Exception as e:
@@ -285,7 +255,8 @@ def add():
     return render_template(
         'investor_reports/add.html',
         form=form,
-        title=trans('investor_reports_add_report', default='Add Investor Report', lang=session.get('lang', 'en'))
+        title=trans('investor_reports_add_report', default='Add Investor Report', lang=session.get('lang', 'en')),
+        can_interact=utils.can_user_interact(current_user)
     )
 
 @investor_reports_bp.route('/edit/<id>', methods=['GET', 'POST'])
@@ -293,6 +264,10 @@ def add():
 @utils.requires_role('startup')
 def edit(id):
     """Edit an existing investor report."""
+    if not utils.can_user_interact(current_user):
+        flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
+        return redirect(url_for('general_bp.subscription_required'))
+
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'investor_report'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
@@ -332,7 +307,8 @@ def edit(id):
             'investor_reports/edit.html',
             form=form,
             report=report,
-            title=trans('investor_reports_edit_report', default='Edit Investor Report', lang=session.get('lang', 'en'))
+            title=trans('investor_reports_edit_report', default='Edit Investor Report', lang=session.get('lang', 'en')),
+            can_interact=utils.can_user_interact(current_user)
         )
     except Exception as e:
         logger.error(f"Error fetching investor report {id} for user {current_user.id}: {str(e)}")
@@ -344,6 +320,10 @@ def edit(id):
 @utils.requires_role('startup')
 def delete(id):
     """Delete an investor report."""
+    if not utils.can_user_interact(current_user):
+        flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
+        return redirect(url_for('general_bp.subscription_required'))
+
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'investor_report'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
