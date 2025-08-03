@@ -164,6 +164,26 @@ def initialize_app_data(app):
                                         'products_services': {'bsonType': 'string'},
                                         'phone_number': {'bsonType': 'string'}
                                     }
+                                },
+                                'profile_picture': {'bsonType': ['string', 'null']},
+                                'phone': {'bsonType': ['string', 'null']},
+                                'coin_balance': {'bsonType': ['double', 'null']},
+                                'dark_mode': {'bsonType': ['bool', 'null']},
+                                'settings': {
+                                    'bsonType': ['object', 'null'],
+                                    'properties': {
+                                        'show_kobo': {'bsonType': 'bool'},
+                                        'incognito_mode': {'bsonType': 'bool'},
+                                        'app_sounds': {'bsonType': 'bool'}
+                                    }
+                                },
+                                'security_settings': {
+                                    'bsonType': ['object', 'null'],
+                                    'properties': {
+                                        'fingerprint_password': {'bsonType': 'bool'},
+                                        'fingerprint_pin': {'bsonType': 'bool'},
+                                        'hide_sensitive_data': {'bsonType': 'bool'}
+                                    }
                                 }
                             }
                         }
@@ -308,6 +328,30 @@ def initialize_app_data(app):
                         {'key': [('user_id', ASCENDING), ('read', ASCENDING)]},
                         {'key': [('timestamp', DESCENDING)]}
                     ]
+                },
+                'kyc_records': {
+                    'validator': {
+                        '$jsonSchema': {
+                            'bsonType': 'object',
+                            'required': ['user_id', 'full_name', 'id_type', 'id_number', 'uploaded_id_photo_url', 'status', 'created_at', 'updated_at'],
+                            'properties': {
+                                '_id': {'bsonType': 'objectId'},
+                                'user_id': {'bsonType': 'string'},
+                                'full_name': {'bsonType': 'string'},
+                                'id_type': {'enum': ['NIN', 'Voters Card', 'Passport']},
+                                'id_number': {'bsonType': 'string'},
+                                'uploaded_id_photo_url': {'bsonType': 'string'},
+                                'status': {'enum': ['pending', 'approved', 'rejected']},
+                                'created_at': {'bsonType': 'date'},
+                                'updated_at': {'bsonType': 'date'}
+                            }
+                        }
+                    },
+                    'indexes': [
+                        {'key': [('user_id', ASCENDING)], 'unique': True},
+                        {'key': [('status', ASCENDING)]},
+                        {'key': [('created_at', DESCENDING)]}
+                    ]
                 }
             }
                 
@@ -398,7 +442,9 @@ def initialize_app_data(app):
                                 {'is_subscribed': {'$exists': False}},
                                 {'subscription_plan': {'$exists': False}},
                                 {'subscription_start': {'$exists': False}},
-                                {'subscription_end': {'$exists': False}}
+                                {'subscription_end': {'$exists': False}},
+                                {'settings': {'$exists': False}},
+                                {'security_settings': {'$exists': False}}
                             ]
                         })
                         for user in users_to_fix:
@@ -448,6 +494,18 @@ def initialize_app_data(app):
                                     f"Initialized trial and subscription fields for user {user['_id']}",
                                     extra={'session_id': 'no-session-id'}
                                 )
+                            if 'settings' not in user:
+                                updates['settings'] = {
+                                    'show_kobo': False,
+                                    'incognito_mode': False,
+                                    'app_sounds': True
+                                }
+                            if 'security_settings' not in user:
+                                updates['security_settings'] = {
+                                    'fingerprint_password': False,
+                                    'fingerprint_pin': False,
+                                    'hide_sensitive_data': False
+                                }
                             if updates:
                                 db_instance.users.update_one(
                                     {'_id': user['_id']},
@@ -472,7 +530,9 @@ def initialize_app_data(app):
 class User:
     def __init__(self, id, email, display_name=None, role='trader', is_admin=False, setup_complete=False, language='en', 
                  is_trial=True, trial_start=None, trial_end=None, is_subscribed=False, 
-                 subscription_plan=None, subscription_start=None, subscription_end=None):
+                 subscription_plan=None, subscription_start=None, subscription_end=None,
+                 profile_picture=None, phone=None, coin_balance=0, dark_mode=False, 
+                 settings=None, security_settings=None):
         self.id = id
         self.email = email
         self.username = display_name or email.split('@')[0]
@@ -488,6 +548,12 @@ class User:
         self.subscription_plan = subscription_plan
         self.subscription_start = subscription_start
         self.subscription_end = subscription_end
+        self.profile_picture = profile_picture
+        self.phone = phone
+        self.coin_balance = coin_balance
+        self.dark_mode = dark_mode
+        self.settings = settings or {}
+        self.security_settings = security_settings or {}
 
     @property
     def is_authenticated(self):
@@ -554,7 +620,21 @@ def create_user(db, user_data):
             'subscription_start': None,
             'subscription_end': None,
             'created_at': datetime.utcnow(),
-            'business_details': user_data.get('business_details')
+            'business_details': user_data.get('business_details'),
+            'profile_picture': user_data.get('profile_picture', None),
+            'phone': user_data.get('phone', None),
+            'coin_balance': user_data.get('coin_balance', 0),
+            'dark_mode': user_data.get('dark_mode', False),
+            'settings': user_data.get('settings', {
+                'show_kobo': False,
+                'incognito_mode': False,
+                'app_sounds': True
+            }),
+            'security_settings': user_data.get('security_settings', {
+                'fingerprint_password': False,
+                'fingerprint_pin': False,
+                'hide_sensitive_data': False
+            })
         }
         
         with db.client.start_session() as session:
@@ -579,7 +659,13 @@ def create_user(db, user_data):
             is_subscribed=user_doc['is_subscribed'],
             subscription_plan=user_doc['subscription_plan'],
             subscription_start=user_doc['subscription_start'],
-            subscription_end=user_doc['subscription_end']
+            subscription_end=user_doc['subscription_end'],
+            profile_picture=user_doc['profile_picture'],
+            phone=user_doc['phone'],
+            coin_balance=user_doc['coin_balance'],
+            dark_mode=user_doc['dark_mode'],
+            settings=user_doc['settings'],
+            security_settings=user_doc['security_settings']
         )
     except Exception as e:
         logger.error(f"Error creating user: {str(e)}", 
@@ -615,7 +701,13 @@ def get_user_by_email(db, email):
                 is_subscribed=user_doc.get('is_subscribed', False),
                 subscription_plan=user_doc.get('subscription_plan'),
                 subscription_start=user_doc.get('subscription_start'),
-                subscription_end=user_doc.get('subscription_end')
+                subscription_end=user_doc.get('subscription_end'),
+                profile_picture=user_doc.get('profile_picture'),
+                phone=user_doc.get('phone'),
+                coin_balance=user_doc.get('coin_balance', 0),
+                dark_mode=user_doc.get('dark_mode', False),
+                settings=user_doc.get('settings', {}),
+                security_settings=user_doc.get('security_settings', {})
             )
         return None
     except Exception as e:
@@ -652,7 +744,13 @@ def get_user(db, user_id):
                 is_subscribed=user_doc.get('is_subscribed', False),
                 subscription_plan=user_doc.get('subscription_plan'),
                 subscription_start=user_doc.get('subscription_start'),
-                subscription_end=user_doc.get('subscription_end')
+                subscription_end=user_doc.get('subscription_end'),
+                profile_picture=user_doc.get('profile_picture'),
+                phone=user_doc.get('phone'),
+                coin_balance=user_doc.get('coin_balance', 0),
+                dark_mode=user_doc.get('dark_mode', False),
+                settings=user_doc.get('settings', {}),
+                security_settings=user_doc.get('security_settings', {})
             )
         return None
     except Exception as e:
@@ -970,7 +1068,13 @@ def to_dict_user(user):
         'is_subscribed': user.is_subscribed,
         'subscription_plan': user.subscription_plan,
         'subscription_start': user.subscription_start,
-        'subscription_end': user.subscription_end
+        'subscription_end': user.subscription_end,
+        'profile_picture': user.profile_picture,
+        'phone': user.phone,
+        'coin_balance': user.coin_balance,
+        'dark_mode': user.dark_mode,
+        'settings': user.settings,
+        'security_settings': user.security_settings
     }
 
 def to_dict_record(record):
@@ -1066,4 +1170,100 @@ def to_dict_audit_log(record):
         'action': record.get('action', ''),
         'details': record.get('details', {}),
         'timestamp': record.get('timestamp')
+    }
+
+def create_kyc_record(db, kyc_data):
+    """
+    Create a new KYC record in the kyc_records collection.
+    
+    Args:
+        db: MongoDB database instance
+        kyc_data: Dictionary containing KYC information
+    
+    Returns:
+        str: ID of the created KYC record
+    """
+    try:
+        required_fields = ['user_id', 'full_name', 'id_type', 'id_number', 'uploaded_id_photo_url', 'status', 'created_at', 'updated_at']
+        if not all(field in kyc_data for field in required_fields):
+            raise ValueError(trans('general_missing_kyc_fields', default='Missing required KYC fields'))
+        result = db.kyc_records.insert_one(kyc_data)
+        logger.info(f"{trans('general_kyc_created', default='Created KYC record with ID')}: {result.inserted_id}", 
+                   extra={'session_id': kyc_data.get('session_id', 'no-session-id')})
+        return str(result.inserted_id)
+    except Exception as e:
+        logger.error(f"{trans('general_kyc_creation_error', default='Error creating KYC record')}: {str(e)}", 
+                    exc_info=True, extra={'session_id': kyc_data.get('session_id', 'no-session-id')})
+        raise
+
+def update_kyc_record(db, kyc_id, update_data):
+    """
+    Update a KYC record in the kyc_records collection.
+    
+    Args:
+        db: MongoDB database instance
+        kyc_id: The ID of the KYC record to update
+        update_data: Dictionary containing fields to update
+    
+    Returns:
+        bool: True if updated, False if not found or no changes made
+    """
+    try:
+        update_data['updated_at'] = datetime.utcnow()
+        result = db.kyc_records.update_one(
+            {'_id': ObjectId(kyc_id)},
+            {'$set': update_data}
+        )
+        if result.modified_count > 0:
+            logger.info(f"{trans('general_kyc_updated', default='Updated KYC record with ID')}: {kyc_id}", 
+                       extra={'session_id': 'no-session-id'})
+            return True
+        logger.info(f"{trans('general_kyc_no_change', default='No changes made to KYC record with ID')}: {kyc_id}", 
+                   extra={'session_id': 'no-session-id'})
+        return False
+    except Exception as e:
+        logger.error(f"{trans('general_kyc_update_error', default='Error updating KYC record with ID')} {kyc_id}: {str(e)}", 
+                    exc_info=True, extra={'session_id': 'no-session-id'})
+        raise
+
+def get_kyc_record(db, filter_kwargs):
+    """
+    Retrieve KYC records based on filter criteria.
+    
+    Args:
+        db: MongoDB database instance
+        filter_kwargs: Dictionary of filter criteria (e.g., {'user_id': 'user123'})
+    
+    Returns:
+        list: List of KYC records
+    """
+    try:
+        return list(db.kyc_records.find(filter_kwargs).sort('created_at', DESCENDING))
+    except Exception as e:
+        logger.error(f"{trans('general_kyc_fetch_error', default='Error getting KYC records')}: {str(e)}", 
+                    exc_info=True, extra={'session_id': 'no-session-id'})
+        raise
+
+def to_dict_kyc_record(record):
+    """
+    Convert KYC record to dictionary.
+    
+    Args:
+        record: KYC document
+    
+    Returns:
+        dict: KYC dictionary
+    """
+    if not record:
+        return {'user_id': None, 'status': None}
+    return {
+        'id': str(record.get('_id', '')),
+        'user_id': record.get('user_id', ''),
+        'full_name': record.get('full_name', ''),
+        'id_type': record.get('id_type', ''),
+        'id_number': record.get('id_number', ''),
+        'uploaded_id_photo_url': record.get('uploaded_id_photo_url', ''),
+        'status': record.get('status', ''),
+        'created_at': record.get('created_at'),
+        'updated_at': record.get('updated_at')
     }
