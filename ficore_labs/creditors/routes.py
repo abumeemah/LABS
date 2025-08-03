@@ -38,7 +38,7 @@ creditors_bp = Blueprint('creditors', __name__, url_prefix='/creditors')
 @login_required
 @utils.requires_role('trader')
 def index():
-    """List all creditor records for the current user."""
+    """List all creditor records for the current user (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to view all creditors during testing
@@ -46,9 +46,15 @@ def index():
         query = {'type': 'creditor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'creditor'}
         creditors = list(db.records.find(query).sort('created_at', -1))
         
+        # Check if user can interact (for template rendering)
+        can_interact = utils.is_admin() or current_user.is_trial_active()
+        if not can_interact:
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
+        
         return render_template(
             'creditors/index.html',
-            creditors=creditors
+            creditors=creditors,
+            can_interact=can_interact
         )
     except Exception as e:
         logger.error(f"Error fetching creditors for user {current_user.id}: {str(e)}")
@@ -59,7 +65,7 @@ def index():
 @login_required
 @utils.requires_role('trader')
 def manage():
-    """List all creditor records for management (edit/delete) by the current user."""
+    """List all creditor records for management (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to view all creditors during testing
@@ -67,10 +73,16 @@ def manage():
         query = {'type': 'creditor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'creditor'}
         creditors = list(db.records.find(query).sort('created_at', -1))
         
+        # Check if user can interact (for template rendering)
+        can_interact = utils.is_admin() or current_user.is_trial_active()
+        if not can_interact:
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
+        
         return render_template(
             'creditors/manage_creditors.html',
             creditors=creditors,
             format_currency=utils.format_currency,
+            can_interact=can_interact,
             title=trans('creditors_manage_title', default='Manage Creditors', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -82,7 +94,7 @@ def manage():
 @login_required
 @utils.requires_role('trader')
 def view(id):
-    """View detailed information about a specific creditor (JSON API)."""
+    """View detailed information about a specific creditor (JSON API, view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to view any creditor during testing
@@ -95,6 +107,7 @@ def view(id):
         creditor['_id'] = str(creditor['_id'])
         creditor['created_at'] = creditor['created_at'].isoformat() if creditor.get('created_at') else None
         creditor['reminder_count'] = creditor.get('reminder_count', 0)
+        creditor['can_interact'] = utils.is_admin() or current_user.is_trial_active()
         
         return jsonify(creditor)
     except Exception as e:
@@ -105,7 +118,7 @@ def view(id):
 @login_required
 @utils.requires_role('trader')
 def view_page(id):
-    """Render a detailed view page for a specific creditor."""
+    """Render a detailed view page for a specific creditor (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to view any creditor during testing
@@ -116,9 +129,15 @@ def view_page(id):
             flash(trans('creditors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('creditors.index'))
         
+        # Check if user can interact (for template rendering)
+        can_interact = utils.is_admin() or current_user.is_trial_active()
+        if not can_interact:
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
+        
         return render_template(
             'creditors/view.html',
-            creditor=creditor
+            creditor=creditor,
+            can_interact=can_interact
         )
     except Exception as e:
         logger.error(f"Error rendering creditor view page {id} for user {current_user.id}: {str(e)}")
@@ -129,8 +148,15 @@ def view_page(id):
 @login_required
 @utils.requires_role('trader')
 def share(id):
-    """Generate a WhatsApp link to share IOU details."""
+    """Generate a WhatsApp link to share IOU details (requires active trial/subscription)."""
     try:
+        if not utils.is_admin():
+            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+                if not current_user.is_subscribed:
+                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to share IOUs.')}), 403
+                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your subscription has expired. Please renew to share IOUs.')}), 403
+        
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to share any creditor during testing
         # TODO: Restore original user_id filter for production
@@ -140,8 +166,6 @@ def share(id):
             return jsonify({'success': False, 'message': trans('creditors_record_not_found', default='Record not found')}), 404
         if not creditor.get('contact'):
             return jsonify({'success': False, 'message': trans('creditors_no_contact', default='No contact provided for sharing')}), 400
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            return jsonify({'success': False, 'message': trans('debtors_insufficient_credits', default='Insufficient credits to share IOU')}), 400
         
         contact = re.sub(r'\D', '', creditor['contact'])
         if contact.startswith('0'):
@@ -152,17 +176,6 @@ def share(id):
         message = f"Hi {creditor['name']}, this is an IOU for {utils.format_currency(creditor['amount_owed'])} recorded on FiCore Records on {utils.format_date(creditor['created_at'])}. Details: {creditor.get('description', 'No description provided')}."
         whatsapp_link = f"https://wa.me/{contact}?text={urllib.parse.quote(message)}"
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"IOU shared for {creditor['name']} (Ficore Credits)"
-            })
-        
         return jsonify({'success': True, 'whatsapp_link': whatsapp_link})
     except Exception as e:
         logger.error(f"Error sharing IOU for creditor {id}: {str(e)}")
@@ -172,8 +185,15 @@ def share(id):
 @login_required
 @utils.requires_role('trader')
 def send_reminder():
-    """Send delivery reminder to creditor via SMS/WhatsApp or set snooze."""
+    """Send delivery reminder to creditor via SMS/WhatsApp or set snooze (requires active trial/subscription)."""
     try:
+        if not utils.is_admin():
+            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+                if not current_user.is_subscribed:
+                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to send reminders.')}), 403
+                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your subscription has expired. Please renew to send reminders.')}), 403
+        
         data = request.get_json()
         debt_id = data.get('debtId')
         recipient = data.get('recipient')
@@ -193,10 +213,6 @@ def send_reminder():
         if not creditor:
             return jsonify({'success': False, 'message': trans('creditors_record_not_found', default='Record not found')}), 404
         
-        credit_cost = 2 if recipient else 1
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(credit_cost):
-            return jsonify({'success': False, 'message': trans('debtors_insufficient_credits', default='Insufficient credits to send reminder')}), 400
-        
         update_data = {'$inc': {'reminder_count': 1}}
         if snooze_days:
             update_data['$set'] = {'reminder_date': datetime.utcnow() + timedelta(days=snooze_days)}
@@ -212,17 +228,6 @@ def send_reminder():
         
         if success:
             db.records.update_one({'_id': ObjectId(debt_id)}, update_data)
-            
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -credit_cost}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -credit_cost,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"{'Reminder sent' if recipient else 'Snooze set'} for {creditor['name']} (Ficore Credits)"
-                })
             
             db.reminder_logs.insert_one({
                 'user_id': str(current_user.id),
@@ -246,8 +251,17 @@ def send_reminder():
 @login_required
 @utils.requires_role('trader')
 def generate_iou(id):
-    """Generate PDF IOU for a creditor."""
+    """Generate PDF IOU for a creditor (requires active trial/subscription)."""
     try:
+        if not utils.is_admin():
+            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+                if not current_user.is_subscribed:
+                    flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to generate IOUs.'), 'warning')
+                    return redirect(url_for('subscribe_bp.subscribe'))
+                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                    flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to generate IOUs.'), 'warning')
+                    return redirect(url_for('subscribe_bp.subscribe'))
+        
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
         from reportlab.lib.units import inch
@@ -261,10 +275,6 @@ def generate_iou(id):
         if not creditor:
             flash(trans('creditors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('creditors.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('debtors_insufficient_credits', default='Insufficient credits to generate IOU'), 'danger')
-            return redirect(url_for('credits.request_credits'))
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -293,17 +303,6 @@ def generate_iou(id):
         p.showPage()
         p.save()
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"IOU generated for {creditor['name']} (Ficore Credits)"
-            })
-        
         buffer.seek(0)
         return Response(
             buffer.getvalue(),
@@ -322,11 +321,17 @@ def generate_iou(id):
 @login_required
 @utils.requires_role('trader')
 def add():
-    """Add a new creditor record."""
+    """Add a new creditor record (requires active trial/subscription)."""
+    if not utils.is_admin():
+        if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+            if not current_user.is_subscribed:
+                flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to create creditors.'), 'warning')
+                return redirect(url_for('subscribe_bp.subscribe'))
+            elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to create creditors.'), 'warning')
+                return redirect(url_for('subscribe_bp.subscribe'))
+    
     form = CreditorForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient credits to create a creditor. Request more credits.'), 'danger')
-        return redirect(url_for('credits.request_credits'))
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
@@ -341,19 +346,6 @@ def add():
                 'created_at': datetime.utcnow()
             }
             db.records.insert_one(record)
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(
-                    user_query,
-                    {'$inc': {'ficore_credit_balance': -1}}
-                )
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"Creditor creation: {record['name']} (Ficore Credits)"
-                })
             flash(trans('creditors_create_success', default='Creditor created successfully'), 'success')
             return redirect(url_for('creditors.index'))
         except Exception as e:
@@ -369,16 +361,27 @@ def add():
 @login_required
 @utils.requires_role('trader')
 def edit(id):
-    """Edit an existing creditor record."""
+    """Edit an existing creditor record (requires active trial/subscription for POST)."""
     try:
         db = utils.get_mongo_db()
-        # TEMPORARY: Allow admin to edit any creditor during testing
+        # TEMPORARY: Allow admin to view any creditor during testing
         # TODO: Restore original user_id filter for production
         query = {'_id': ObjectId(id), 'type': 'creditor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'creditor'}
         creditor = db.records.find_one(query)
         if not creditor:
             flash(trans('creditors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('creditors.index'))
+        
+        if request.method == 'POST':
+            if not utils.is_admin():
+                if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+                    if not current_user.is_subscribed:
+                        flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to edit creditors.'), 'warning')
+                        return redirect(url_for('subscribe_bp.subscribe'))
+                    elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                        flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to edit creditors.'), 'warning')
+                        return redirect(url_for('subscribe_bp.subscribe'))
+        
         form = CreditorForm(data={
             'name': creditor['name'],
             'contact': creditor['contact'],
@@ -404,10 +407,16 @@ def edit(id):
                 logger.error(f"Error updating creditor {id} for user {current_user.id}: {str(e)}")
                 flash(trans('creditors_edit_error', default='An error occurred'), 'danger')
         
+        # Check if user can interact (for template rendering)
+        can_interact = utils.is_admin() or current_user.is_trial_active()
+        if not can_interact:
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
+        
         return render_template(
             'creditors/edit.html',
             form=form,
-            creditor=creditor
+            creditor=creditor,
+            can_interact=can_interact
         )
     except Exception as e:
         logger.error(f"Error fetching creditor {id} for user {current_user.id}: {str(e)}")
@@ -418,8 +427,17 @@ def edit(id):
 @login_required
 @utils.requires_role('trader')
 def delete(id):
-    """Delete a creditor record."""
+    """Delete a creditor record (requires active trial/subscription)."""
     try:
+        if not utils.is_admin():
+            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
+                if not current_user.is_subscribed:
+                    flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to delete creditors.'), 'warning')
+                    return redirect(url_for('subscribe_bp.subscribe'))
+                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
+                    flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to delete creditors.'), 'warning')
+                    return redirect(url_for('subscribe_bp.subscribe'))
+        
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to delete any creditor during testing
         # TODO: Restore original user_id filter for production
@@ -430,15 +448,6 @@ def delete(id):
             return redirect(url_for('creditors.index'))
         result = db.records.delete_one(query)
         if result.deleted_count:
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'creditor_id': str(creditor['_id']),
-                'creditor_name': creditor['name'],
-                'type': 'delete',
-                'amount_change': 0,
-                'date': datetime.utcnow(),
-                'ref': f"Deleted creditor: {creditor['name']} (Ficore Credits)"
-            })
             flash(trans('creditors_delete_success', default='Creditor deleted successfully'), 'success')
         else:
             flash(trans('creditors_record_not_found', default='Record not found'), 'danger')
