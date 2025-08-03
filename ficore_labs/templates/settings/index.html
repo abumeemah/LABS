@@ -5,8 +5,6 @@
     <h1 class="mb-4">{{ t('settings_title', default='Settings') }}</h1>
     <div class="d-grid gap-2">
         <a href="{{ url_for('settings.profile') }}" class="btn btn-primary">{{ t('settings_profile', default='Profile') }}</a>
-        <a href="{{ url_for('settings.notifications') }}" class="btn btn-primary">{{ t('settings_notifications', default='Notifications') }}</a>
-        <a href="{{ url_for('settings.language') }}" class="btn btn-primary">{{ t('settings_language', default='Language') }}</a>
         <a href="{{ url_for('kyc.submit') }}" class="btn btn-primary">{{ t('kyc_verification', default='KYC Verification') }}</a>
     </div>
 </div>
