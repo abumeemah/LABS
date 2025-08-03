@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone  # Added timezone import
 from flask import (
     Flask, jsonify, request, render_template, redirect, url_for, flash,
     make_response, has_request_context, session, Response, current_app, abort
@@ -179,8 +179,8 @@ class User(UserMixin):
         self.display_name = display_name or id
         self.role = role
         self.is_trial = is_trial
-        self.trial_start = trial_start or datetime.utcnow()
-        self.trial_end = trial_end or (datetime.utcnow() + timedelta(days=30))
+        self.trial_start = trial_start or datetime.now(timezone.utc)  # Updated to timezone-aware
+        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))  # Updated to timezone-aware
         self.is_subscribed = is_subscribed
 
     def get(self, key, default=None):
@@ -209,7 +209,7 @@ class User(UserMixin):
         if self.is_subscribed:
             return True
         if self.is_trial and self.trial_end:
-            return datetime.utcnow() <= self.trial_end
+            return datetime.now(timezone.utc) <= self.trial_end  # Updated to timezone-aware
         return False
 
     @property
@@ -232,7 +232,7 @@ def create_app():
         raise ValueError('MONGO_URI must be set')
 
     # Configure upload folder for KYC
-    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
+    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'Uploads')
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  # Ensure uploads directory exists
 
     # Add URL generation configurations to fix BuildError
@@ -463,67 +463,4 @@ def create_app():
 
     @app.route('/set_language/<lang>', methods=['GET'])
     @ensure_session_id
-    def set_language(lang):
-        valid_langs = ['en', 'ha']
-        session['lang'] = lang if lang in valid_langs else 'en'
-        session.modified = True
-        logger.info(f"Language set to {session['lang']} for session {session.get('sid', 'no-session-id')}")
-        return redirect(request.referrer or url_for('index'))
-
-    @app.errorhandler(404)
-    def page_not_found(e):
-        logger.error(f'Not found: {request.url}')
-        return render_template('error/404.html', error=str(e)), 404
-
-    @app.errorhandler(500)
-    def internal_server_error(e):
-        logger.error(f'Server error: {str(e)}')
-        return render_template('error/500.html', error=str(e)), 500
-
-    @app.before_request
-    def check_session_timeout():
-        if request.path.startswith('/static/') or request.path == url_for('subscribe_bp.subscribe'):
-            return
-        if current_user.is_authenticated and 'last_activity' in session:
-            last_activity = session.get('last_activity')
-            if isinstance(last_activity, str):
-                try:
-                    last_activity = datetime.fromisoformat(last_activity.replace(' ', 'T'))
-                except ValueError:
-                    last_activity = datetime.utcnow()
-                    session['last_activity'] = last_activity
-            if (datetime.utcnow() - last_activity).total_seconds() > 1800:
-                user_id = current_user.id
-                sid = session.get('sid', 'no-session-id')
-                logger.info(f"Session timeout for user {user_id}")
-                logout_user()
-                if current_app.config.get('SESSION_TYPE') == 'mongodb':
-                    try:
-                        db = get_mongo_db()
-                        db.sessions.delete_one({'_id': sid})
-                    except Exception as e:
-                        logger.error(f"Failed to delete MongoDB session {sid}: {str(e)}")
-                session.clear()
-                session['lang'] = session.get('lang', 'en')
-                session['sid'] = str(uuid.uuid4())
-                session['is_anonymous'] = True
-                flash('Your session has timed out.', 'warning')
-                response = make_response(redirect(url_for('users.login')))
-                response.set_cookie(
-                    current_app.config['SESSION_COOKIE_NAME'],
-                    '',
-                    expires=0,
-                    httponly=True,
-                    secure=current_app.config.get('SESSION_COOKIE_SECURE', True)
-                )
-                return response
-        if current_user.is_authenticated:
-            session['last_activity'] = datetime.utcnow()
-
-    return app
-
-app = create_app()
-
-if __name__ == '__main__':
-    logger.info('Starting Flask application')
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    def set_language(lang)
