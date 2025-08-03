@@ -132,7 +132,7 @@
                     <div class="mb-3">
                         <label for="reminderMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
                         <textarea class="form-control" id="reminderMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
-                        <div class="form-text">{{ t('general_reminder_cost', default='Cost: 2 coins per reminder') }}</div>
+                        <div class="form-text">{{ t('general_no_cost', default='Free with active subscription') }}</div>
                     </div>
                 </form>
             </div>
@@ -166,7 +166,7 @@
                             <option value="7">{{ t('general_7_days', default='7 Days') }}</option>
                             <option value="14">{{ t('general_14_days', default='14 Days') }}</option>
                         </select>
-                        <div class="form-text">{{ t('general_snooze_cost', default='Cost: 1 coin per snooze') }}</div>
+                        <div class="form-text">{{ t('general_no_cost', default='Free with active subscription') }}</div>
                     </div>
                 </form>
             </div>
