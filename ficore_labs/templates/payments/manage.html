@@ -6,13 +6,15 @@
         <h1>{{ t('payments_manage', default='Manage Payments') }}</h1>
         <small class="subtext">{{ t('payments_subtitle', default='Kuɗin Da Ka Biya Wasu') }}</small>
     </div>
-    <!-- Navigation buttons mirroring debtors manage page -->
     <div class="mb-4">
         <a href="{{ url_for('payments.index') }}" class="btn btn-secondary">{{ t('general_back', default='Back') }}</a>
-        <a href="{{ url_for('payments.add') }}" class="btn btn-primary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% if can_interact %}
+            <a href="{{ url_for('payments.add') }}" class="btn btn-primary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% else %}
+            <a href="{{ url_for('general_bp.subscription_required') }}" class="btn btn-primary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% endif %}
     </div>
     {% if payments|length > 0 %}
-        <!-- Added search functionality -->
         <div class="mb-4">
             <input type="text" id="searchInput" class="form-control" placeholder="{{ t('general_search', default='Search payments...') }}">
         </div>
@@ -37,21 +39,36 @@
                             <td data-label="{{ t('payments_payment_method', default='Payment Method') }}">{{ payment.method or '-' }}</td>
                             <td data-label="{{ t('general_category', default='Category') }}">{{ payment.category or '-' }}</td>
                             <td data-label="{{ t('general_actions', default='Actions') }}">
-                                <a href="{{ url_for('payments.edit', id=payment._id) }}" 
-                                   class="btn btn-primary btn-sm"
-                                   data-bs-toggle="tooltip" 
-                                   title="{{ t('general_edit', default='Edit') }}">
-                                    {{ t('general_edit', default='Edit') }}
-                                </a>
-                                <form action="{{ url_for('payments.delete', id=payment._id) }}" method="POST" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-danger btn-sm" 
-                                            onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
+                                {% if can_interact %}
+                                    <a href="{{ url_for('payments.edit', id=payment._id) }}" 
+                                       class="btn btn-primary btn-sm"
+                                       data-bs-toggle="tooltip" 
+                                       title="{{ t('general_edit', default='Edit') }}">
+                                        {{ t('general_edit', default='Edit') }}
+                                    </a>
+                                    <form action="{{ url_for('payments.delete', id=payment._id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger btn-sm" 
+                                                onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
+                                                data-bs-toggle="tooltip" 
+                                                title="{{ t('general_delete', default='Delete') }}">
+                                            {{ t('general_delete', default='Delete') }}
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <a href="{{ url_for('general_bp.subscription_required') }}" 
+                                       class="btn btn-primary btn-sm disabled"
+                                       data-bs-toggle="tooltip" 
+                                       title="{{ t('general_edit', default='Edit') }}">
+                                        {{ t('general_edit', default='Edit') }}
+                                    </a>
+                                    <button class="btn btn-danger btn-sm disabled" 
                                             data-bs-toggle="tooltip" 
-                                            title="{{ t('general_delete', default='Delete') }}">
+                                            title="{{ t('general_delete', default='Delete') }}"
+                                            onclick="alert('{{ t('payments_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to delete payments.') }}')">
                                         {{ t('general_delete', default='Delete') }}
                                     </button>
-                                </form>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -70,11 +87,9 @@
 {% block page_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
 
-    // Search functionality
     const searchInput = document.getElementById('searchInput');
     const table = document.getElementById('paymentsTable');
     const rows = table.getElementsByTagName('tr');
@@ -85,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = rows[i];
             const cells = row.getElementsByTagName('td');
             let match = false;
-            for (let j = 0; j < cells.length - 1; j++) { // Exclude actions column
+            for (let j = 0; j < cells.length - 1; j++) {
                 if (cells[j].textContent.toLowerCase().includes(filter)) {
                     match = true;
                     break;
