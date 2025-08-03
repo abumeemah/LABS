@@ -231,6 +231,10 @@ def create_app():
         logger.error('MONGO_URI environment variable is not set')
         raise ValueError('MONGO_URI must be set')
 
+    # Configure upload folder for KYC
+    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, 'uploads')
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)  # Ensure uploads directory exists
+
     # Add URL generation configurations to fix BuildError
     app.config['SERVER_NAME'] = os.getenv('SERVER_NAME', 'ficore-labs-records.onrender.com')
     app.config['APPLICATION_ROOT'] = os.getenv('APPLICATION_ROOT', '/')
@@ -314,6 +318,8 @@ def create_app():
     from forecasts.routes import forecasts_bp
     from investor_reports.routes import investor_reports_bp
     from subscribe.routes import subscribe_bp
+    from kyc import kyc_bp
+    from settings import settings_bp
 
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(debtors_bp, url_prefix='/debtors')
@@ -330,7 +336,9 @@ def create_app():
     app.register_blueprint(business, url_prefix='/business')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(notifications)
-    logger.info('Registered core business finance blueprints')
+    app.register_blueprint(kyc_bp, url_prefix='/kyc')
+    app.register_blueprint(settings_bp, url_prefix='/settings')
+    logger.info('Registered all blueprints including KYC and Settings')
 
     # Initialize tools and navigation after blueprints
     @app.before_request
