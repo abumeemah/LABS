@@ -206,7 +206,7 @@ _STARTUP_TOOLS = [
 
 _TRADER_NAV = [
     {
-        "endpoint": "dashboard.index",
+        "endpoint": "general_bp.home",
         "label": "Home",
         "label_key": "general_business_home",
         "description_key": "general_business_home_desc",
@@ -220,14 +220,14 @@ _TRADER_NAV = [
         "description_key": "debtors_dashboard_desc",
         "tooltip_key": "debtors_tooltip",
         "icon": "bi-person-plus"
-    },
+    },    
     {
-        "endpoint": "creditors.index",
-        "label": "Creditors",
-        "label_key": "creditors_dashboard",
-        "description_key": "creditors_dashboard_desc",
-        "tooltip_key": "creditors_tooltip",
-        "icon": "bi-arrow-up-circle"
+        "endpoint": "dashboard.index",
+        "label": "Home",
+        "label_key": "general_business_home",
+        "description_key": "general_business_home_desc",
+        "tooltip_key": "general_business_home_tooltip",
+        "icon": "bi-house"
     },
     {
         "endpoint": "reports.index",
