@@ -318,8 +318,8 @@ def create_app():
     from forecasts.routes import forecasts_bp
     from investor_reports.routes import investor_reports_bp
     from subscribe.routes import subscribe_bp
-    from kyc import kyc_bp
-    from settings import settings_bp
+    from kyc.routes import kyc_bp
+    from settings.routes import settings_bp
 
     app.register_blueprint(users_bp, url_prefix='/users')
     app.register_blueprint(debtors_bp, url_prefix='/debtors')
