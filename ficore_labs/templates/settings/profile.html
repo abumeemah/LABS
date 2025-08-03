@@ -5,22 +5,15 @@
     <div class="d-flex align-items-center mb-4">
         <a href="{{ url_for('dashboard.index') }}" class="back-arrow me-3">←</a>
         <h1>{{ t('settings_hello_user', default='Hello') }}, {{ user.display_name or user._id }}!</h1>
-        <div class="profile-pic-container ms-auto">
-            <img src="{% if user.profile_picture %}{{ url_for('settings.get_profile_picture', user_id=user._id) }}{% else %}{{ url_for('static', filename='img/default_profile.png') }}{% endif %}" alt="{{ t('settings_profile_picture', default='Profile Picture') }}" class="profile-pic" onerror="this.src='{{ url_for('static', filename='img/ficore_records_logo.png') }}';">
-            <label for="profile_picture" class="edit-profile-pic-icon">✎</label>
-            <input type="file" id="profile_picture" name="profile_picture" accept="image/*" style="display: none;">
-        </div>
     </div>
 
     <div class="card card-body mb-3">
         <p class="mb-0">{{ t('settings_account_type', default='Account Type') }}: 
             <strong>
-                {% if user.role == 'personal' %}
-                    {{ t('settings_personal_account', default='Personal Account') }}
-                {% elif user.role == 'trader' %}
+                {% if user.role == 'trader' %}
                     {{ t('settings_trader_account', default='Trader Account') }}
-                {% elif user.role == 'agent' %}
-                    {{ t('settings_agent_account', default='Agent Account') }}
+                {% elif user.role == 'startup' %}
+                    {{ t('settings_startup_account', default='Startup Account') }}
                 {% elif user.role == 'admin' %}
                     {{ t('settings_admin_account', default='Admin Account') }}
                 {% endif %}
@@ -29,23 +22,27 @@
         </p>
     </div>
 
+    <!-- KYC Status Section -->
+    <div class="card card-body mb-3">
+        <h5>{{ t('kyc_status', default='KYC Status') }}</h5>
+        <p>{{ user.kyc_status|capitalize }}</p>
+        {% if user.kyc_status != 'approved' %}
+            <a href="{{ url_for('kyc.submit') }}" class="btn btn-primary">{{ t('submit_kyc', default='Submit KYC') }}</a>
+        {% endif %}
+    </div>
+
     <!-- Explore Your Tools Button Section -->
     <div class="d-grid mb-4">
-        {% if user.role == 'personal' %}
-            <button class="btn btn-primary btn-lg explore-tools-btn" onclick="location.href='{{ url_for('personal.index') }}'">
-                <i class="bi bi-compass me-2"></i> {{ t('settings_explore_personal_tools', default='Explore Your Personal Finance Tools') }}
-            </button>
-            <small class="text-muted text-center mt-2">{{ t('settings_explore_personal_description', default='Access budgeting, bill tracking, financial health scoring, and more!') }}</small>
-        {% elif user.role == 'trader' %}
+        {% if user.role == 'trader' %}
             <button class="btn btn-primary btn-lg explore-tools-btn" onclick="location.href='{{ url_for('general_bp.home') }}'">
                 <i class="bi bi-briefcase me-2"></i> {{ t('settings_explore_business_tools', default='Explore Your Business Tools') }}
             </button>
             <small class="text-muted text-center mt-2">{{ t('settings_explore_business_description', default='Manage debtors, creditors, inventory, payments, and business analytics!') }}</small>
-        {% elif user.role == 'agent' %}
-            <button class="btn btn-primary btn-lg explore-tools-btn" onclick="location.href='{{ url_for('agents_bp.agent_portal') }}'">
-                <i class="bi bi-people me-2"></i> {{ t('settings_explore_agent_tools', default='Explore Your Agent Dashboard') }}
+        {% elif user.role == 'startup' %}
+            <button class="btn btn-primary btn-lg explore-tools-btn" onclick="location.href='{{ url_for('dashboard.index') }}'">
+                <i class="bi bi-rocket-takeoff me-2"></i> {{ t('settings_explore_startup_tools', default='Explore Your Startup Tools') }}
             </button>
-            <small class="text-muted text-center mt-2">{{ t('settings_explore_agent_description', default='Access your agent dashboard to help users and manage your activities!') }}</small>
+            <small class="text-muted text-center mt-2">{{ t('settings_explore_startup_description', default='Track funds, manage forecasts, generate investor reports, and more!') }}</small>
         {% elif user.role == 'admin' %}
             <button class="btn btn-primary btn-lg explore-tools-btn" onclick="location.href='{{ url_for('admin.dashboard') }}'">
                 <i class="bi bi-gear me-2"></i> {{ t('settings_explore_admin_tools', default='Explore Admin Dashboard') }}
@@ -61,9 +58,9 @@
     </div>
 
     <section class="profile-section mb-4">
-        <h2>{{ t('settings_personal_data', default='Personal Data') }}</h2>
+        <h2>{{ t('settings_business_data', default='Business Data') }}</h2>
         <div class="card card-body">
-            <form method="POST" action="{{ url_for('settings.profile') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('settings.profile') }}">
                 {{ form.csrf_token }}
 
                 <div class="form-group mb-3">
@@ -96,41 +93,7 @@
                     {% endif %}
                 </div>
 
-                {% if user.role == 'personal' %}
-                <hr class="my-4">
-                <h5>{{ t('settings_personal_information', default='Personal Information') }}</h5>
-                
-                <div class="form-group mb-3">
-                    <label for="first_name" class="form-label">{{ t('general_first_name', default='First Name') }}</label>
-                    {{ form.first_name(placeholder=t('settings_first_name_placeholder', default='Enter your first name')) }}
-                    {% if form.first_name.errors %}
-                        {% for error in form.first_name.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="last_name" class="form-label">{{ t('general_last_name', default='Last Name') }}</label>
-                    {{ form.last_name(placeholder=t('settings_last_name_placeholder', default='Enter your last name')) }}
-                    {% if form.last_name.errors %}
-                        {% for error in form.last_name.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="personal_address" class="form-label">{{ t('general_address', default='Address') }}</label>
-                    {{ form.personal_address(placeholder=t('settings_address_placeholder', default='Enter your address')) }}
-                    {% if form.personal_address.errors %}
-                        {% for error in form.personal_address.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                {% elif user.role == 'trader' %}
+                {% if user.role in ['trader', 'startup'] %}
                 <hr class="my-4">
                 <h5>{{ t('settings_business_information', default='Business Information') }}</h5>
                 
@@ -173,50 +136,6 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-
-                {% elif user.role == 'agent' %}
-                <hr class="my-4">
-                <h5>{{ t('settings_agent_information', default='Agent Information') }}</h5>
-                
-                <div class="form-group mb-3">
-                    <label for="agent_name" class="form-label">{{ t('settings_agent_name', default='Agent Name') }}</label>
-                    {{ form.agent_name(placeholder=t('settings_agent_name_placeholder', default='Enter agent name')) }}
-                    {% if form.agent_name.errors %}
-                        {% for error in form.agent_name.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="agent_id" class="form-label">{{ t('settings_agent_id', default='Agent ID') }}</label>
-                    {{ form.agent_id(placeholder=t('settings_agent_id_placeholder', default='Enter agent ID')) }}
-                    {% if form.agent_id.errors %}
-                        {% for error in form.agent_id.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="area" class="form-label">{{ t('settings_area', default='Area') }}</label>
-                    {{ form.area(placeholder=t('settings_area_placeholder', default='Enter your area')) }}
-                    {% if form.area.errors %}
-                        {% for error in form.area.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="agent_role" class="form-label">{{ t('settings_agent_role', default='Role') }}</label>
-                    {{ form.agent_role(placeholder=t('settings_agent_role_placeholder', default='e.g., Sales Agent, Support Agent')) }}
-                    {% if form.agent_role.errors %}
-                        {% for error in form.agent_role.errors %}
-                            <p class="text-danger mt-1">{{ error }}</p>
-                        {% endfor %}
-                    {% endif %}
-                </div>
                 {% endif %}
 
                 <div class="text-center">
@@ -229,10 +148,6 @@
     <section class="profile-section mb-4">
         <h2>{{ t('settings_app_settings', default='App Settings') }}</h2>
         <div class="card card-body">
-            <a href="{{ url_for('settings.language') }}" class="list-item">
-                <i class="bi bi-translate icon-left"></i> {{ t('settings_language', default='Language') }}
-                <i class="bi bi-chevron-right icon-right"></i>
-            </a>
             <div class="list-item toggle-item">
                 <i class="bi bi-currency-dollar icon-left"></i> {{ t('settings_show_kobo', default='Show kobo (Amounts in the format 00.00)') }}
                 <div class="form-check form-switch ms-auto">
@@ -311,34 +226,6 @@
 </div>
 
 <style>
-    .profile-pic-container {
-        position: relative;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        overflow: hidden;
-        background-color: #eee;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .profile-pic {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    .edit-profile-pic-icon {
-        position: absolute;
-        bottom: 0;
-        right: 0;
-        background-color: var(--button-primary-bg);
-        color: white;
-        border-radius: 50%;
-        padding: 4px;
-        font-size: 0.8em;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        cursor: pointer;
-    }
     .profile-section h2 {
         font-size: 1.2em;
         margin-bottom: 15px;
@@ -477,44 +364,6 @@
                     alert('{{ t('general_error_occurred', default='An error occurred. Please try again.') }}');
                     this.checked = !value;
                 });
-            });
-        });
-
-        // Handle profile picture upload
-        document.getElementById('profile_picture').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            if (!file.type.startsWith('image/')) {
-                alert('{{ t('settings_invalid_image', default='Please upload a valid image file.') }}');
-                return;
-            }
-
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                alert('{{ t('settings_image_too_large', default='Image size must be less than 5MB.') }}');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('profile_picture', file);
-            formData.append('csrf_token', '{{ csrf_token() }}');
-
-            fetch('/settings/api/upload-profile-picture', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.querySelector('.profile-pic').src = data.image_url;
-                    alert('{{ t('settings_profile_picture_updated', default='Profile picture updated successfully.') }}');
-                } else {
-                    alert('{{ t('settings_failed_to_upload_picture', default='Failed to upload profile picture') }}: ' + (data.message || '{{ t('general_unknown_error', default='Unknown error') }}'));
-                }
-            })
-            .catch(error => {
-                console.error('Error uploading profile picture:', error);
-                alert('{{ t('general_error_occurred', default='An error occurred. Please try again.') }}');
             });
         });
     });
