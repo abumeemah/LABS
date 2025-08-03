@@ -408,7 +408,7 @@ def verify_2fa():
             flash(trans('general_invalid_otp', default='Invalid or expired OTP'), 'danger')
             logger.warning(f"Failed 2FA attempt for username: {username}")
             return render_template('users/verify_2fa.html', form=form, title=trans('general_verify_otp', lang=session.get('lang', 'en')))
-        except.errors.PyMongoError as e:
+        except pymongo.errors.PyMongoError as e:
             logger.error(f"MongoDB error during 2FA verification for {username}: {str(e)}")
             flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
             return render_template('users/verify_2fa.html', form=form, title=trans('general_verify_otp', lang=session.get('lang', 'en'))), 500
@@ -511,7 +511,7 @@ def signup():
             logger.info(f"New user created and logged in: {username} (role: {role}). Session: {dict(session)}")
             setup_route = get_setup_wizard_route(role)
             return redirect(url_for(setup_route))
-        except.errors.PyMongoError as e:
+        except pymongo.errors.PyMongoError as e:
             logger.error(f"MongoDB error during signup for {username}: {str(e)}")
             flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
             return render_template('users/signup.html', form=form, title=trans('general_signup', lang=session.get('lang', 'en'))), 500
@@ -566,7 +566,7 @@ def forgot_password():
             logger.info(f"Password reset email sent to {email}")
             flash(trans('general_reset_email_sent', default='Password reset email sent'), 'success')
             return render_template('users/forgot_password.html', form=form, title=trans('general_send_reset_link', lang=session.get('lang', 'en')))
-        except errors.PyMongoError as e:
+        except pymongo.errors.PyMongoError as e:
             logger.error(f"MongoDB error during forgot password for {email}: {str(e)}")
             flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
             return render_template('users/forgot_password.html', form=form, title=trans('general_send_reset_link', lang=session.get('lang', 'en'))), 500
@@ -618,7 +618,7 @@ def reset_password():
             logger.info(f"Password reset successfully for user: {user['_id']}")
             flash(trans('general_reset_success', default='Password reset successfully'), 'success')
             return redirect(url_for('users.login'))
-        except.errors.PyMongoError as e:
+        except pymongo.errors.PyMongoError as e:
             logger.error(f"MongoDB error during password reset for {email}: {str(e)}")
             flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
             return render_template('users/reset_password.html', form=form, token=token, title=trans('general_reset_password', lang=session.get('lang', 'en'))), 500
@@ -689,7 +689,7 @@ def setup_wizard():
                 for error in errors:
                     flash(f"{field}: {error}", 'danger')
         return render_template('users/business_setup.html', form=form, title=trans('general_business_setup', lang=session.get('lang', 'en')))
-    except.errors.PyMongoError as e:
+    except pymongo.errors.PyMongoError as e:
         logger.error(f"MongoDB error during business setup for {user_id}: {str(e)}")
         flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
         return render_template('users/business_setup.html', form=form, title=trans('general_business_setup', lang=session.get('lang', 'en'))), 500
@@ -713,7 +713,7 @@ def logout():
                 db = utils.get_mongo_db()
                 db.sessions.delete_one({'_id': sid})
                 logger.info(f"Deleted MongoDB session for user {user_id}, SID: {sid}")
-            except errors.PyMongoError as e:
+            except pymongo.errors.PyMongoError as e:
                 logger.error(f"Failed to delete MongoDB session for SID {sid}: {str(e)}")
         session.clear()
         session['lang'] = lang
