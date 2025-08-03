@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script>{% extends "base.html" %}
+{% extends "base.html" %}
 {% from "_ficore_report_header.html" import ficore_report_header %}
 {% block title %}{{ t('forecasts_details', default='Forecast Details') }} - FiCore{% endblock %}
 {% block content %}
@@ -64,14 +25,22 @@
         </div>
         <div class="card-footer">
             <div class="dropdown d-inline-block">
-                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
                     {{ t('general_actions', default='Actions') }}
                 </button>
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item download-report-btn" 
                            data-id="{{ forecast._id }}"
-                           href="#">{{ t('forecasts_download_report', default='Download Report') }}</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('forecasts.generate_report_csv', id=forecast._id) }}">{{ t('forecasts_download_report_csv', default='Download Report CSV') }}</a></li>
+                           href="#"
+                           {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
+                           {{ t('forecasts_download_report', default='Download Report') }}
+                    </a></li>
+                    <li><a class="dropdown-item" 
+                           href="{{ url_for('forecasts.generate_report_csv', id=forecast._id) }}"
+                           {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
+                           {{ t('forecasts_download_report_csv', default='Download Report CSV') }}
+                    </a></li>
                 </ul>
             </div>
             <a href="{{ url_for('forecasts.index') }}" 
@@ -94,10 +63,13 @@
             </div>
             <div class="modal-body">
                 <p>{{ t('forecasts_download_report_confirm', default='Generate and download forecast report as PDF for') }} {{ forecast.title }}?</p>
-                <div class="form-text">{{ t('forecasts_download_cost', default='Cost: 1 coin per download') }}</div>
+                {% if not can_interact %}
+                    <div class="form-text">{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}</div>
+                {% endif %}
             </div>
             <div class="modal-footer">
-                <a id="confirmDownloadReportBtn" class="btn btn-primary" href="#">
+                <a id="confirmDownloadReportBtn" class="btn btn-primary" href="#"
+                   {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
                     {{ t('forecasts_download_report', default='Download Report') }}
                 </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -117,9 +89,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.querySelectorAll('.download-report-btn').forEach(button => {
         button.addEventListener('click', () => {
+            {% if can_interact %}
             const forecastId = button.dataset.id;
             document.getElementById('confirmDownloadReportBtn').setAttribute('href', `/forecasts/generate_report/${forecastId}`);
             new bootstrap.Modal(document.getElementById('downloadReportModal')).show();
+            {% endif %}
         });
     });
 });
