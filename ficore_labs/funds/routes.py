@@ -1,3 +1,4 @@
+```python
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, Response, session
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
@@ -39,10 +40,12 @@ def index():
         db = utils.get_mongo_db()
         query = {'type': 'fund'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'fund'}
         funds = list(db.records.find(query).sort('created_at', -1))
+        can_interact = utils.can_user_interact(current_user)
         
         return render_template(
             'funds/index.html',
             funds=funds,
+            can_interact=can_interact,
             title=trans('funds_index', default='Fund Tracking', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -59,10 +62,12 @@ def manage():
         db = utils.get_mongo_db()
         query = {'type': 'fund'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'fund'}
         funds = list(db.records.find(query).sort('created_at', -1))
+        can_interact = utils.can_user_interact(current_user)
         
         return render_template(
             'funds/manage_funds.html',
             funds=funds,
+            can_interact=can_interact,
             title=trans('funds_manage', default='Manage Funds', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -103,9 +108,12 @@ def view_page(id):
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
         
+        can_interact = utils.can_user_interact(current_user)
+        
         return render_template(
             'funds/view.html',
             fund=fund,
+            can_interact=can_interact,
             title=trans('funds_details', default='Fund Details', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -119,6 +127,10 @@ def view_page(id):
 def generate_report(id):
     """Generate PDF report for a fund."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('funds_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate reports.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
         fund = db.records.find_one(query)
@@ -126,10 +138,6 @@ def generate_report(id):
         if not fund:
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -160,17 +168,6 @@ def generate_report(id):
         p.showPage()
         p.save()
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Fund report generated for {fund['source']}"
-            })
-        
         buffer.seek(0)
         return Response(
             buffer.getvalue(),
@@ -191,6 +188,10 @@ def generate_report(id):
 def generate_report_csv(id):
     """Generate CSV report for a fund."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('funds_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate reports.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
         fund = db.records.find_one(query)
@@ -198,10 +199,6 @@ def generate_report_csv(id):
         if not fund:
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         output = []
         output.extend(ficore_csv_header(current_user))
@@ -214,17 +211,6 @@ def generate_report_csv(id):
         output.append([trans('funds_date_recorded', default='Date Recorded'), utils.format_date(fund['created_at'])])
         output.append([''])
         output.append([trans('funds_report_footer', default='This document serves as a fund report recorded on FiCore Records.')])
-        
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Fund report CSV generated for {fund['source']}"
-            })
         
         buffer = io.BytesIO()
         writer = csv.writer(buffer, lineterminator='\n')
@@ -249,11 +235,11 @@ def generate_report_csv(id):
 @utils.requires_role('startup')
 def add():
     """Add a new fund record."""
-    form = FundForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('funds_insufficient_credits', default='Insufficient Ficore Credits to add fund'), 'danger')
-        return redirect(url_for('agents_bp.manage_credits'))
+    if not utils.can_user_interact(current_user):
+        flash(trans('funds_subscription_required', default='Your trial or subscription has expired. Please subscribe to add funds.'), 'danger')
+        return redirect(url_for('dashboard.upgrade'))
 
+    form = FundForm()
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
@@ -268,17 +254,6 @@ def add():
             }
             db.records.insert_one(fund_data)
             
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"Fund added: {form.source.data}"
-                })
-            
             flash(trans('funds_add_success', default='Fund added successfully'), 'success')
             return redirect(url_for('funds.index'))
         except Exception as e:
@@ -288,6 +263,7 @@ def add():
     return render_template(
         'funds/add.html',
         form=form,
+        can_interact=utils.can_user_interact(current_user),
         title=trans('funds_add_fund', default='Add Fund', lang=session.get('lang', 'en'))
     )
 
@@ -297,6 +273,10 @@ def add():
 def edit(id):
     """Edit an existing fund record."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('funds_subscription_required', default='Your trial or subscription has expired. Please subscribe to edit funds.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
         fund = db.records.find_one(query)
@@ -317,7 +297,7 @@ def edit(id):
                 updated_record = {
                     'source': form.source.data,
                     'amount': form.amount.data,
-                    'category': form.category.data,
+                    'category': form.source.data,
                     'description': form.description.data,
                     'updated_at': datetime.utcnow()
                 }
@@ -335,6 +315,7 @@ def edit(id):
             'funds/edit.html',
             form=form,
             fund=fund,
+            can_interact=utils.can_user_interact(current_user),
             title=trans('funds_edit_fund', default='Edit Fund', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -348,6 +329,10 @@ def edit(id):
 def delete(id):
     """Delete a fund record."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('funds_subscription_required', default='Your trial or subscription has expired. Please subscribe to delete funds.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'fund'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'fund'}
         result = db.records.delete_one(query)
