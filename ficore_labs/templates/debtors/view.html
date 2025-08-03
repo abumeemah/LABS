@@ -31,24 +31,39 @@
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item download-iou-btn" 
                            data-id="{{ debtor._id }}"
-                           href="#">{{ t('debtors_download_iou', default='Download IOU') }}</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('debtors.generate_iou_csv', id=debtor._id) }}">{{ t('debtors_download_iou_csv', default='Download IOU CSV') }}</a></li>
+                           href="#"
+                           {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.') }}"{% endif %}>
+                           {{ t('debtors_download_iou', default='Download IOU') }}
+                    </a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('debtors.generate_iou_csv', id=debtor._id) }}"
+                           {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.') }}"{% endif %}>
+                           {{ t('debtors_download_iou_csv', default='Download IOU CSV') }}
+                    </a></li>
                     {% if debtor.contact %}
                     <li><a class="dropdown-item share-btn" 
                            data-id="{{ debtor._id }}" 
                            data-contact="{{ debtor.contact }}"
-                           href="#">{{ t('debtors_share_iou', default='Share IOU') }}</a></li>
+                           href="#"
+                           {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to share IOUs.') }}"{% endif %}>
+                           {{ t('debtors_share_iou', default='Share IOU') }}
+                    </a></li>
                     <li><a class="dropdown-item reminder-btn" 
                            data-id="{{ debtor._id }}" 
                            data-name="{{ debtor.name }}" 
                            data-amount="{{ debtor.amount_owed }}" 
                            data-contact="{{ debtor.contact }}" 
                            data-date="{{ format_date(debtor.created_at) }}"
-                           href="#">{{ t('debtors_reminder', default='Reminder') }}</a></li>
+                           href="#"
+                           {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                           {{ t('debtors_reminder', default='Reminder') }}
+                    </a></li>
                     <li><a class="dropdown-item snooze-btn" 
                            data-id="{{ debtor._id }}" 
                            data-name="{{ debtor.name }}"
-                           href="#">{{ t('debtors_snooze', default='Snooze') }}</a></li>
+                           href="#"
+                           {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                           {{ t('debtors_snooze', default='Snooze') }}
+                    </a></li>
                     {% endif %}
                 </ul>
             </div>
@@ -72,10 +87,10 @@
             </div>
             <div class="modal-body">
                 <p>{{ t('debtors_download_iou_confirm', default='Generate and download IOU as PDF for') }} {{ debtor.name }}?</p>
-                <div class="form-text">{{ t('debtors_download_cost', default='Cost: 1 coin per download') }}</div>
             </div>
             <div class="modal-footer">
-                <a id="confirmDownloadIouBtn" class="btn btn-primary" href="#">
+                <a id="confirmDownloadIouBtn" class="btn btn-primary" href="#"
+                   {% if not can_interact %}class="disabled" data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.') }}"{% endif %}>
                     {{ t('debtors_download_iou', default='Download IOU') }}
                 </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -98,20 +113,20 @@
                 <form id="reminderForm">
                     <div class="mb-3">
                         <label for="reminderType" class="form-label">{{ t('debtors_reminder_type', default='Reminder Type') }}</label>
-                        <select class="form-select" id="reminderType" required>
+                        <select class="form-select" id="reminderType" required {% if not can_interact %}disabled{% endif %}>
                             <option value="sms">{{ t('general_sms', default='SMS') }}</option>
                             <option value="whatsapp">{{ t('general_whatsapp', default='WhatsApp') }}</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="reminderMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
-                        <textarea class="form-control" id="reminderMessage" rows="4" required></textarea>
-                        <div class="form-text">{{ t('debtors_reminder_cost', default='Cost: 2 coins per reminder') }}</div>
+                        <textarea class="form-control" id="reminderMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="sendReminderBtn">
+                <button type="button" class="btn btn-primary" id="sendReminderBtn"
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
                     {{ t('debtors_send_reminder', default='Send Reminder') }}
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -134,18 +149,18 @@
                 <form id="snoozeForm">
                     <div class="mb-3">
                         <label for="snoozeDays" class="form-label">{{ t('debtors_snooze_duration', default='Snooze Duration') }}</label>
-                        <select class="form-select" id="snoozeDays" required>
+                        <select class="form-select" id="snoozeDays" required {% if not can_interact %}disabled{% endif %}>
                             <option value="1">{{ t('general_1_day', default='1 Day') }}</option>
                             <option value="3">{{ t('general_3_days', default='3 Days') }}</option>
                             <option value="7">{{ t('general_7_days', default='7 Days') }}</option>
                             <option value="14">{{ t('general_14_days', default='14 Days') }}</option>
                         </select>
-                        <div class="form-text">{{ t('debtors_snooze_cost', default='Cost: 1 coin per snooze') }}</div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="snoozeReminderBtn">
+                <button type="button" class="btn btn-primary" id="snoozeReminderBtn"
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
                     {{ t('debtors_snooze', default='Snooze') }}
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
