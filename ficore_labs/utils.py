@@ -362,6 +362,39 @@ def generate_tools_with_urls(tools):
             result.append({**tool, 'url': '#', 'icon': tool.get('icon', 'bi-question-circle')})
     return result
 
+def get_explore_features():
+    """
+    Returns a list of features for the landing page, categorized by Traders and Startups.
+    """
+    try:
+        features = []
+        # Trader Tools (from TRADER_TOOLS)
+        for tool in TRADER_TOOLS:
+            features.append({
+                "category": "Business",
+                "label_key": tool["label_key"],
+                "description_key": tool["description_key"],
+                "label": tool["label"],
+                "description": tool.get("description", "Description not available"),
+                "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
+            })
+        # Startup Tools (from STARTUP_TOOLS, selecting unique tools)
+        for tool in STARTUP_TOOLS:
+            if tool["label_key"] in ["funds_dashboard", "forecasts_dashboard", "investor_reports_dashboard"]:
+                features.append({
+                    "category": "Startup",
+                    "label_key": tool["label_key"],
+                    "description_key": tool["description_key"],
+                    "label": tool["label"],
+                    "description": tool.get("description", "Description not available"),
+                    "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
+                })
+        logger.info("Successfully retrieved explore features for Traders and Startups")
+        return features
+    except Exception as e:
+        logger.error(f"Error retrieving explore features: {str(e)}")
+        return []
+
 def get_limiter():
     return limiter
 
@@ -582,5 +615,5 @@ __all__ = [
     'format_date', 'sanitize_input', 'generate_unique_id', 'validate_required_fields',
     'get_user_language', 'log_user_action', 'initialize_tools_with_urls', 
     'UNAUTHENTICATED_NAV', 'TRADER_TOOLS', 'TRADER_NAV', 'STARTUP_TOOLS', 
-    'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 'ALL_TOOLS'
+    'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 'ALL_TOOLS', 'get_explore_features'
 ]
