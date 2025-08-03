@@ -22,16 +22,7 @@
         <h3 class="section-title">{{ t('general_who_we_serve', default='Who We Serve') | e }}</h3>
         <p class="text-muted">{{ t('general_who_we_serve_desc', default='Business Finance empowers individuals, businesses, and agents with tailored financial tools.') | e }}</p>
         <div class="row">
-            <div class="col-md-4">
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h5>{{ t('general_personal', default='Personal Users') | e }}</h5>
-                        <p>{{ t('general_personal_desc', default='Plan budgets and track bills with ease.') | e }}</p>
-                        <a href="{{ url_for('users.signup') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">{{ t('general_get_started', default='Get Started') | e }}</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card mb-3">
                     <div class="card-body">
                         <h5>{{ t('general_trader', default='Business Owners') | e }}</h5>
@@ -40,11 +31,11 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card mb-3">
                     <div class="card-body">
-                        <h5>{{ t('general_agent', default='Agents') | e }}</h5>
-                        <p>{{ t('general_agent_desc', default='Onboard traders and manage operations effortlessly.') | e }}</p>
+                        <h5>{{ t('general_startup', default='Startups') | e }}</h5>
+                        <p>{{ t('general_startup_desc', default='Track funds, forecast scenarios, and generate investor reports.') | e }}</p>
                         <a href="{{ url_for('users.signup') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">{{ t('general_get_started', default='Get Started') | e }}</a>
                     </div>
                 </div>
@@ -99,7 +90,7 @@
             <div class="col">
                 <div class="why-item text-center">
                     <i class="bi bi-check-circle-fill text-success fs-3 mb-2"></i>
-                    <p class="text-muted">{{ t('general_empowers', default='Empowers individuals, businesses, and agents') | e }}</p>
+                    <p class="text-muted">{{ t('general_empowers', default='Empowers businesses and startups') | e }}</p>
                 </div>
             </div>
             <div class="col">
@@ -129,22 +120,15 @@
                 <div class="carousel-item active">
                     <div class="testimonial text-center">
                         <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="MU">
-                        <p class="text-muted">{{ t('general_impressed_features', default='Business Finance’s budgeting and bill tracking tools are intuitive and perfect for managing my personal finances!') | e }}</p>
-                        <p class="name fw-bold">Musa, {{ t('general_personal_user', default='Personal User') | e }}</p>
+                        <p class="text-muted">{{ t('general_impressed_features', default='Business Finance’s budgeting and bill tracking tools are intuitive and perfect for managing my business finances!') | e }}</p>
+                        <p class="name fw-bold">Musa, {{ t('general_trader', default='Business Owner') | e }}</p>
                     </div>
                 </div>
                 <div class="carousel-item">
                     <div class="testimonial text-center">
                         <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="AA">
-                        <p class="text-muted">{{ t('general_business_finance_praise', default='Managing my business’s debtors, creditors, and reports has never been easier!') | e }}</p>
-                        <p class="name fw-bold">Aisha, {{ t('general_business_owner', default='Business Owner') | e }}</p>
-                    </div>
-                </div>
-                <div class="carousel-item">
-                    <div class="testimonial text-center">
-                        <img src="{{ url_for('static', filename='img/default_avatar.png') | e }}" alt="{{ t('general_testimonial_avatar', default='User Avatar') | e }}" class="avatar-circle gradient-bg mx-auto mb-3" data-initials="ASU">
-                        <p class="text-muted">{{ t('general_potential_support', default='As an agent, Business Finance makes onboarding traders and managing operations seamless and efficient.') | e }}</p>
-                        <p class="name fw-bold">Sani, {{ t('general_agent', default='Agent') | e }}</p>
+                        <p class="text-muted">{{ t('general_business_finance_praise', default='Managing my startup’s funds, forecasts, and investor reports has never been easier!') | e }}</p>
+                        <p class="name fw-bold">Aisha, {{ t('general_startup', default='Startup') | e }}</p>
                     </div>
                 </div>
             </div>
@@ -186,19 +170,19 @@
                 </h3>
                 <div id="collapseRoles" class="accordion-collapse collapse" aria-labelledby="faqRoles" data-bs-parent="#faqAccordion">
                     <div class="accordion-body">
-                        {{ t('general_faq_roles_answer', default='Business Finance supports personal users with budgeting and bill tracking tools, business owners with debtor, creditor, and report management, and agents with trader onboarding and operations management.') | e }}
+                        {{ t('general_faq_roles_answer', default='Business Finance supports business owners with debtor, creditor, and report management, and startups with fund tracking, forecasting, and investor reporting.') | e }}
                     </div>
                 </div>
             </div>
             <div class="accordion-item">
-                <h3 class="accordion-header" id="faqBusinessAgent">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBusinessAgent" aria-expanded="false" aria-controls="collapseBusinessAgent">
-                        {{ t('general_faq_business_agent', default='How does Business Finance support businesses and agents?') | e }}
+                <h3 class="accordion-header" id="faqBusinessStartup">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBusinessStartup" aria-expanded="false" aria-controls="collapseBusinessStartup">
+                        {{ t('general_faq_business_startup', default='How does Business Finance support businesses and startups?') | e }}
                     </button>
                 </h3>
-                <div id="collapseBusinessAgent" class="accordion-collapse collapse" aria-labelledby="faqBusinessAgent" data-bs-parent="#faqAccordion">
+                <div id="collapseBusinessStartup" class="accordion-collapse collapse" aria-labelledby="faqBusinessStartup" data-bs-parent="#faqAccordion">
                     <div class="accordion-body">
-                        {{ t('general_faq_business_agent_answer', default='Business owners can track debtors, creditors, and generate reports, while agents can register traders and manage operations. Sign up to explore these tools.') | e }}
+                        {{ t('general_faq_business_startup_answer', default='Business owners can track debtors, creditors, and generate reports, while startups can manage funds, forecasts, and investor reports. Sign up to explore these tools.') | e }}
                     </div>
                 </div>
             </div>
@@ -233,7 +217,7 @@
     <!-- Call to Action -->
     <div class="section-card mt-5 text-center">
         <h3 class="section-title">{{ t('general_ready_to_start', default='Ready to Take Control of Your Finances?') | e }}</h3>
-        <p class="text-muted">{{ t('general_signup_prompt', default='Sign up today to access tools for personal finance, business management, or agent services.') | e }}</p>
+        <p class="text-muted">{{ t('general_signup_prompt', default='Sign up today to access tools for business management or startup growth.') | e }}</p>
         <div class="btn-group btn-group-vertical d-md-flex mb-3">
             <a href="{{ url_for('users.signup') }}" class="btn btn-primary mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_get_started_tooltip', default='Start your financial journey') | e }}">{{ t('general_get_started', default='Get Started') | e }}</a>
             <a href="{{ url_for('users.login') }}" class="btn btn-outline-primary mx-2" data-bs-toggle="tooltip" data-bs-title="{{ t('general_login_tooltip', default='Log in to your account') | e }}">{{ t('general_login', default='Log In') | e }}</a>
