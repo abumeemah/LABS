@@ -152,7 +152,7 @@ def log_audit_action(action, details=None):
             'details': details or {},
             'timestamp': datetime.utcnow(),
         })
-    except.errors.PyMongoError as e:
+    except pymongo.errors.PyMongoError as e:
         logger.error(f"Error logging audit action '{action}': {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error logging audit action '{action}': {str(e)}")
