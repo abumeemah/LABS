@@ -463,4 +463,60 @@ def create_app():
 
     @app.route('/set_language/<lang>', methods=['GET'])
     @ensure_session_id
-    def set_language(lang)
+    def set_language(lang):
+        valid_langs = ['en', 'ha']
+        session['lang'] = lang if lang in valid_langs else 'en'
+        session.modified = True
+        logger.info(f"Language set to {session['lang']} for session {session.get('sid', 'no-session-id')}")
+        return redirect(request.referrer or url_for('index'))
+
+    @app.errorhandler(404)
+    def page_not_found(e):
+        logger.error(f'Not found: {request.url}')
+        return render_template('error/404.html', error=str(e)), 404
+
+    @app.errorhandler(500)
+    def internal_server_error(e):
+        logger.error(f'Server error: {str(e)}')
+        return render_template('error/500.html', error=str(e)), 500
+
+    @app.before_request
+    def check_session_timeout():
+        if request.path.startswith('/static/') or request.path == url_for('subscribe_bp.subscribe'):
+            return
+        if current_user.is_authenticated and 'last_activity' in session:
+            last_activity = session.get('last_activity')
+            if isinstance(last_activity, str):
+                try:
+                    last_activity = datetime.fromisoformat(last_activity.replace(' ', 'T'))
+                except ValueError:
+                    last_activity = datetime.now(timezone.utc)  # Updated to timezone-aware
+                    session['last_activity'] = last_activity.isoformat()
+            if (datetime.now(timezone.utc) - last_activity).total_seconds() > 1800:  # Updated to timezone-aware
+                user_id = current_user.id
+                sid = session.get('sid', 'no-session-id')
+                logger.info(f"Session timeout for user {user_id}")
+                logout_user()
+                if current_app.config.get('SESSION_TYPE') == 'mongodb':
+                    try:
+                        db = get_mongo_db()
+                        db.sessions.delete_one({'_id': sid})
+                    except Exception as e:
+                        logger.error(f"Failed to delete MongoDB session {sid}: {str(e)}")
+                session.clear()
+                session['lang'] = session.get('lang', 'en')
+                session['sid'] = str(uuid.uuid4())
+                session['is_anonymous'] = True
+                flash('Your session has timed out.', 'warning')
+                response = make_response(redirect(url_for('users.login')))
+                response.set_cookie(
+                    current_app.config['SESSION_COOKIE_NAME'],
+                    '',
+                    expires=0,
+                    httponly=True,
+                    secure=current_app.config.get('SESSION_COOKIE_SECURE', True)
+                )
+                return response
+        if current_user.is_authenticated:
+            session['last_activity'] = datetime.now(timezone.utc).isoformat()  # Updated to timezone-aware
+            session.modified = True
