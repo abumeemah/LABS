@@ -36,10 +36,12 @@ def index():
         db = utils.get_mongo_db()
         query = {'type': 'forecast'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'forecast'}
         forecasts = list(db.records.find(query).sort('forecast_date', -1))
+        can_interact = utils.can_user_interact(current_user)
         
         return render_template(
             'forecasts/index.html',
             forecasts=forecasts,
+            can_interact=can_interact,
             title=trans('forecasts_index', default='Financial Forecasts', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -56,10 +58,12 @@ def manage():
         db = utils.get_mongo_db()
         query = {'type': 'forecast'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'forecast'}
         forecasts = list(db.records.find(query).sort('forecast_date', -1))
+        can_interact = utils.can_user_interact(current_user)
         
         return render_template(
             'forecasts/manage_forecasts.html',
             forecasts=forecasts,
+            can_interact=can_interact,
             title=trans('forecasts_manage', default='Manage Forecasts', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -101,9 +105,12 @@ def view_page(id):
             flash(trans('forecasts_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('forecasts.index'))
         
+        can_interact = utils.can_user_interact(current_user)
+        
         return render_template(
             'forecasts/view.html',
             forecast=forecast,
+            can_interact=can_interact,
             title=trans('forecasts_details', default='Forecast Details', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -117,6 +124,10 @@ def view_page(id):
 def generate_report(id):
     """Generate PDF report for a forecast."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate reports.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'forecast'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'forecast'}
         forecast = db.records.find_one(query)
@@ -124,10 +135,6 @@ def generate_report(id):
         if not forecast:
             flash(trans('forecasts_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('forecasts.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('forecasts_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -162,17 +169,6 @@ def generate_report(id):
         p.showPage()
         p.save()
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Forecast report generated for {forecast['title']}"
-            })
-        
         buffer.seek(0)
         return Response(
             buffer.getvalue(),
@@ -193,6 +189,10 @@ def generate_report(id):
 def generate_report_csv(id):
     """Generate CSV report for a forecast."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate reports.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'forecast'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'forecast'}
         forecast = db.records.find_one(query)
@@ -200,10 +200,6 @@ def generate_report_csv(id):
         if not forecast:
             flash(trans('forecasts_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('forecasts.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('forecasts_insufficient_credits', default='Insufficient Ficore Credits to generate report'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         output = []
         output.extend(ficore_csv_header(current_user))
@@ -218,17 +214,6 @@ def generate_report_csv(id):
         output.append([trans('forecasts_date_recorded', default='Date Recorded'), utils.format_date(forecast['created_at'])])
         output.append([''])
         output.append([trans('forecasts_report_footer', default='This document serves as a financial forecast recorded on FiCore Records.')])
-        
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"Forecast report CSV generated for {forecast['title']}"
-            })
         
         buffer = io.BytesIO()
         writer = csv.writer(buffer, lineterminator='\n')
@@ -253,11 +238,11 @@ def generate_report_csv(id):
 @utils.requires_role('startup')
 def add():
     """Add a new forecast record."""
-    form = ForecastForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('forecasts_insufficient_credits', default='Insufficient Ficore Credits to add forecast'), 'danger')
-        return redirect(url_for('agents_bp.manage_credits'))
+    if not utils.can_user_interact(current_user):
+        flash(trans('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to add forecasts.'), 'danger')
+        return redirect(url_for('dashboard.upgrade'))
 
+    form = ForecastForm()
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
@@ -273,17 +258,6 @@ def add():
             }
             db.records.insert_one(forecast_data)
             
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"Forecast added: {form.title.data}"
-                })
-            
             flash(trans('forecasts_add_success', default='Forecast added successfully'), 'success')
             return redirect(url_for('forecasts.index'))
         except Exception as e:
@@ -293,6 +267,7 @@ def add():
     return render_template(
         'forecasts/add.html',
         form=form,
+        can_interact=utils.can_user_interact(current_user),
         title=trans('forecasts_add_forecast', default='Add Forecast', lang=session.get('lang', 'en'))
     )
 
@@ -302,6 +277,10 @@ def add():
 def edit(id):
     """Edit an existing forecast record."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to edit forecasts.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'forecast'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'forecast'}
         forecast = db.records.find_one(query)
@@ -342,6 +321,7 @@ def edit(id):
             'forecasts/edit.html',
             form=form,
             forecast=forecast,
+            can_interact=utils.can_user_interact(current_user),
             title=trans('forecasts_edit_forecast', default='Edit Forecast', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -355,6 +335,10 @@ def edit(id):
 def delete(id):
     """Delete a forecast record."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to delete forecasts.'), 'danger')
+            return redirect(url_for('dashboard.upgrade'))
+
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'forecast'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'forecast'}
         result = db.records.delete_one(query)
