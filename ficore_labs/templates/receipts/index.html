@@ -6,9 +6,12 @@
         <h1>{{ t('receipts_title', default='Money In') }}</h1>
         <small class="subtext">{{ t('receipts_subtitle', default='Kuɗin Da Aka Biyaka') }}</small>
     </div>
-    <!-- Added Manage Receipts button to mirror debtors, linking to new manage route -->
     <div class="mb-4">
-        <a href="{{ url_for('receipts.add') }}" class="btn btn-secondary">{{ t('receipts_add_title', default='Add Money In') }}</a>
+        {% if can_interact %}
+            <a href="{{ url_for('receipts.add') }}" class="btn btn-secondary">{{ t('receipts_add_title', default='Add Money In') }}</a>
+        {% else %}
+            <a href="{{ url_for('general_bp.subscription_required') }}" class="btn btn-secondary">{{ t('receipts_add_title', default='Add Money In') }}</a>
+        {% endif %}
         <a href="{{ url_for('receipts.manage') }}" class="btn btn-primary">{{ t('receipts_manage', default='Manage Receipts') }}</a>
     </div>
     {% if receipts|length > 0 %}
@@ -33,7 +36,6 @@
                             <td data-label="{{ t('receipts_payment_method', default='Payment Method') }}">{{ receipt.method or '-' }}</td>
                             <td data-label="{{ t('general_category', default='Category') }}">{{ receipt.category or '-' }}</td>
                             <td data-label="{{ t('general_actions', default='Actions') }}">
-                                <!-- Replaced btn-group with single Actions button to trigger modal, mirroring debtors -->
                                 <button class="btn btn-secondary btn-sm actions-btn"
                                         data-bs-toggle="modal"
                                         data-bs-target="#actionsModal"
@@ -61,7 +63,6 @@
     {% endif %}
 </div>
 
-<!-- Actions Modal, adapted from debtors to handle receipt actions -->
 <div class="modal fade" id="actionsModal" tabindex="-1" aria-labelledby="actionsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -85,15 +86,19 @@
             </div>
             <div class="modal-footer">
                 <a id="viewBtn" class="btn btn-primary" href="#">{{ t('general_view', default='View') }}</a>
-                <a id="downloadBtn" class="btn btn-primary" href="#">{{ t('receipts_download_receipt', default='Download Receipt') }}</a>
-                <button id="shareBtn" class="btn btn-primary" style="display: none;">{{ t('receipts_share_receipt', default='Share Receipt') }}</button>
+                {% if can_interact %}
+                    <a id="downloadBtn" class="btn btn-primary" href="#">{{ t('receipts_download_receipt', default='Download Receipt') }}</a>
+                    <button id="shareBtn" class="btn btn-primary" style="display: none;">{{ t('receipts_share_receipt', default='Share Receipt') }}</button>
+                {% else %}
+                    <a id="downloadBtn" class="btn btn-primary disabled" href="{{ url_for('general_bp.subscription_required') }}">{{ t('receipts_download_receipt', default='Download Receipt') }}</a>
+                    <button id="shareBtn" class="btn btn-primary disabled" style="display: none;" onclick="alert('{{ t('receipts_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to share receipts.') }}')">{{ t('receipts_share_receipt', default='Share Receipt') }}</button>
+                {% endif %}
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_close', default='Close') }}</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Share Modal, new addition to allow sharing via SMS/WhatsApp, mirroring debtors' reminder modal -->
 <div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -102,23 +107,28 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('general_close', default='Close') }}"></button>
             </div>
             <div class="modal-body">
-                <form id="shareForm">
+                {% if not can_interact %}
+                    <div class="alert alert-warning" role="alert">
+                        {{ t('receipts_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to share receipts.') }}
+                        <a href="{{ url_for('general_bp.subscription_required') }}" class="alert-link">{{ t('general_subscribe', default='Subscribe now') }}</a>
+                    </div>
+                {% endif %}
+                <form id="shareForm" {% if not can_interact %}onsubmit="return false;"{% endif %}>
                     <div class="mb-3">
                         <label for="shareType" class="form-label">{{ t('receipts_share_type', default='Share Type') }}</label>
-                        <select class="form-select" id="shareType" required>
+                        <select class="form-select" id="shareType" required {% if not can_interact %}disabled{% endif %}>
                             <option value="sms">{{ t('general_sms', default='SMS') }}</option>
                             <option value="whatsapp">{{ t('general_whatsapp', default='WhatsApp') }}</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="shareMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
-                        <textarea class="form-control" id="shareMessage" rows="4" required></textarea>
-                        <div class="form-text">{{ t('receipts_share_cost', default='Cost: 2 coins per share') }}</div>
+                        <textarea class="form-control" id="shareMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="sendShareBtn">{{ t('receipts_share_receipt', default='Share Receipt') }}</button>
+                <button type="button" class="btn btn-primary" id="sendShareBtn" {% if not can_interact %}disabled{% endif %}>{{ t('receipts_share_receipt', default='Share Receipt') }}</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_cancel', default='Cancel') }}</button>
             </div>
         </div>
@@ -128,7 +138,6 @@
 
 {% block page_scripts %}
 <style>
-/* Reused modal button styling from debtors for consistency */
 .modal-footer .btn {
     padding: 0.75rem 1.5rem;
     border-radius: 10px;
@@ -163,13 +172,11 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
 
     let currentReceiptData = null;
 
-    // Function to update modal button classes based on visibility
     function updateModalButtonClasses() {
         const modalFooter = document.querySelector('#actionsModal .modal-footer');
         const visibleButtons = Array.from(modalFooter.querySelectorAll('.btn')).filter(btn => btn.style.display !== 'none');
@@ -204,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Actions button functionality
     document.querySelectorAll('.actions-btn').forEach(button => {
         button.addEventListener('click', () => {
             console.log('Actions button clicked:', button.dataset.id);
@@ -219,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 contact: button.dataset.contact
             };
 
-            // Populate modal fields
             document.getElementById('modalName').textContent = currentReceiptData.name;
             document.getElementById('modalAmount').textContent = `{{ t('general_currency_symbol', default='₦') }}${currentReceiptData.amount}`;
             document.getElementById('modalMethod').textContent = currentReceiptData.method || '-';
@@ -227,17 +232,14 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalDate').textContent = currentReceiptData.date;
             document.getElementById('modalDescription').textContent = currentReceiptData.description || '-';
 
-            // Update action buttons visibility
-            document.getElementById('shareBtn').style.display = currentReceiptData.contact ? 'inline-block' : 'none';
             document.getElementById('viewBtn').href = `/receipts/view/${currentReceiptData._id}`;
             document.getElementById('downloadBtn').href = `/receipts/generate_pdf/${currentReceiptData._id}`;
+            document.getElementById('shareBtn').style.display = currentReceiptData.contact ? 'inline-block' : 'none';
 
-            // Update button classes
             updateModalButtonClasses();
         });
     });
 
-    // Share button in modal
     document.getElementById('shareBtn').addEventListener('click', () => {
         if (!currentReceiptData) {
             console.error('No receipt data available');
@@ -248,7 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
         new bootstrap.Modal(document.getElementById('shareModal')).show();
     });
 
-    // Send share functionality
     document.getElementById('sendShareBtn').addEventListener('click', function() {
         if (!currentReceiptData) {
             console.error('No receipt data available');
