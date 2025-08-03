@@ -3417,3 +3417,25 @@ a.text-decoration-none:hover .btn-outline-primary {
   max-width: 160px;
   height: auto;
 }
+.fintech-top-header {
+  padding: 0.5rem 1rem; /* Reduce vertical padding */
+  display: flex;
+  align-items: center;  /* Vertically center content */
+  justify-content: space-between;
+}
+
+.app-logo {
+  max-height: 50px;  /* Adjust to desired logo size */
+  width: auto;
+}
+
+header img {
+  max-height: 50px;
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.brand-text {
+  font-size: 1.25rem; /* Adjust text size */
+  vertical-align: middle;
+}
