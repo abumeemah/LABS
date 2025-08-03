@@ -6,14 +6,14 @@
     <h1>{{ t('reports_profit_loss', default='Profit/Loss Report') }}</h1>
     <small class="text-muted">{{ t('profit_loss_description', default='View detailed profit and loss statements for your business performance analysis.') }}</small>
     
-    {% if read_only %}
+    {% if not can_interact %}
     <div class="alert alert-warning mt-3">
         {{ t('read_only_mode', default='Your trial has expired. You can view your data but cannot generate new reports. Subscribe to continue.') }}
         <a href="{{ url_for('subscribe.index') }}" class="btn btn-primary btn-sm ms-2">{{ t('subscribe_now', default='Subscribe Now') }}</a>
     </div>
     {% endif %}
 
-    {% if not read_only %}
+    {% if can_interact %}
     <form method="POST" class="mt-4">
         {{ form.hidden_tag() }}
         <div class="row g-3">
