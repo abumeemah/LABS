@@ -2161,17 +2161,31 @@ h2.card-title {
     }
 }
 
-.footer {
+body::after {
+    content: "";
+    display: block;
     background: var(--footer-bg);
+    height: var(--footer-height);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: -1;
+}
+
+
+.footer {
+    background: none; /* Remove local background */
     color: #ffffff;
     padding: 2rem 1rem;
     text-align: center;
     flex-shrink: 0;
     min-height: var(--footer-height);
-    border-top: 1px solid var(--card-border);
-    max-width: 1200px; /* Set a max width to constrain content */
-    margin: 0 auto; /* Center the footer content */
-    box-sizing: border-box; /* Ensure padding is included in width */
+    max-width: 1200px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
 }
 
 .footer a {
