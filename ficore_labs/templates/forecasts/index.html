@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script>{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}{{ t('forecasts_title', default='Financial Forecasts') }} - FiCore{% endblock %}
 {% block content %}
 <div class="container mt-5">
@@ -46,8 +7,15 @@
         <small class="subtext">{{ t('forecasts_subtitle', default='Plan Your Financial Future') }}</small>
     </div>
     <div class="mb-4">
-        <a href="{{ url_for('forecasts.add') }}" class="btn btn-secondary">{{ t('forecasts_create_title', default='Add New Forecast') }}</a>
-        <a href="{{ url_for('forecasts.manage') }}" class="btn btn-primary">{{ t('forecasts_manage', default='Manage Forecasts') }}</a>
+        <a href="{{ url_for('forecasts.add') }}" 
+           class="btn btn-secondary" 
+           {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to add forecasts.') }}"{% endif %}>
+            {{ t('forecasts_create_title', default='Add New Forecast') }}
+        </a>
+        <a href="{{ url_for('forecasts.manage') }}" 
+           class="btn btn-primary">
+            {{ t('forecasts_manage', default='Manage Forecasts') }}
+        </a>
     </div>
     {% if forecasts|length > 0 %}
         <div class="table-responsive">
@@ -80,7 +48,8 @@
                                         data-projected_expenses="{{ forecast.projected_expenses }}"
                                         data-net_profit="{{ forecast.projected_revenue - forecast.projected_expenses }}"
                                         data-forecast_date="{{ format_date(forecast.forecast_date) }}"
-                                        data-description="{{ forecast.description or '' }}">
+                                        data-description="{{ forecast.description or '' }}"
+                                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to view forecast details.') }}"{% endif %}>
                                     {{ t('general_actions', default='Actions') }}
                                 </button>
                             </td>
@@ -121,7 +90,10 @@
             </div>
             <div class="modal-footer">
                 <a id="viewBtn" class="btn btn-primary" href="#">{{ t('general_view', default='View') }}</a>
-                <button id="downloadBtn" class="btn btn-primary">{{ t('forecasts_download_report', default='Download Report') }}</button>
+                <button id="downloadBtn" class="btn btn-primary" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
+                    {{ t('forecasts_download_report', default='Download Report') }}
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_close', default='Close') }}</button>
             </div>
         </div>
@@ -138,10 +110,15 @@
             </div>
             <div class="modal-body">
                 <p>{{ t('forecasts_download_report_confirm', default='Generate and download forecast report as PDF?') }}</p>
-                <div class="form-text">{{ t('forecasts_download_cost', default='Cost: 1 coin per download') }}</div>
+                {% if not can_interact %}
+                    <div class="form-text">{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}</div>
+                {% endif %}
             </div>
             <div class="modal-footer">
-                <a id="confirmDownloadReportBtn" class="btn btn-primary" href="#">{{ t('forecasts_download_report', default='Download Report') }}</a>
+                <a id="confirmDownloadReportBtn" class="btn btn-primary" href="#"
+                   {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('forecasts_subscription_required', default='Your trial or subscription has expired. Please subscribe to download reports.') }}"{% endif %}>
+                    {{ t('forecasts_download_report', default='Download Report') }}
+                </a>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_cancel', default='Cancel') }}</button>
             </div>
         </div>
@@ -241,13 +218,13 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modalNetProfit').textContent = `{{ t('general_currency_symbol', default='₦') }}${currentForecastData.net_profit}`;
             document.getElementById('modalForecastDate').textContent = currentForecastData.forecast_date;
             document.getElementById('modalDescription').textContent = currentForecastData.description || '-';
-            document.getElementById('viewBtn').href = `/forecasts/view/${currentForecastData._id}`;
+            document.getElementById('viewBtn').href = `/forecasts/view_page/${currentForecastData._id}`;
 
             updateModalButtonClasses();
         });
     });
 
-    document.getElementById('downloadBtn').addEventListener('click', () => {
+    document.getElementById('downloadBtn').addEvent="{% if can_interact %}click{% else %}null{% endif %}">(() => {
         if (!currentForecastData) {
             console.error('No forecast data available');
             return;
@@ -255,6 +232,5 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('confirmDownloadReportBtn').setAttribute('href', `/forecasts/generate_report/${currentForecastData._id}`);
         new bootstrap.Modal(document.getElementById('downloadReportModal')).show();
     });
-});
 </script>
 {% endblock %}
