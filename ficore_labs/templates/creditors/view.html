@@ -6,6 +6,13 @@
         <h1>{{ t('creditors_details', default='Creditor Details') }}</h1>
         <small class="subtext">{{ creditor.name }} - {{ t('creditors_what_you_owe_subtext', default='Kuɗin da Mutane ke Bin Ka') }}</small>
     </div>
+    {% if not can_interact %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            {{ t('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.') }}
+            <a href="{{ url_for('subscribe_bp.subscribe') }}" class="alert-link">{{ t('general_subscribe_now', default='Subscribe Now') }}</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ t('general_close', default='Close') }}"></button>
+        </div>
+    {% endif %}
     <div class="card">
         <div class="card-body">
             <div class="row">
