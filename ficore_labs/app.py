@@ -520,7 +520,8 @@ def create_app():
         if current_user.is_authenticated:
             session['last_activity'] = datetime.now(timezone.utc).isoformat()  # Updated to timezone-aware
             session.modified = True
-return app
+            
+    return app
 
 app = create_app()
 
