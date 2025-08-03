@@ -468,7 +468,7 @@ def signup():
                 'created_at': datetime.utcnow(),
                 'is_trial': True,
                 'trial_start': datetime.utcnow(),
-                'trial_end': datetime.utcnow() + timedelta(days=7),
+                'trial_end': datetime.utcnow() + timedelta(days=30),
                 'is_subscribed': False,
                 'subscription_plan': None,
                 'subscription_start': None,
