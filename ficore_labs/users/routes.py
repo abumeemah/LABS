@@ -238,7 +238,7 @@ def login():
                     return render_template('users/login.html', form=form, title=trans('general_login', lang=session.get('lang', 'en'))), 401
 
                 username = user['_id']
-                if not check_password_hash(user['password'], form.password.data):
+                if not check_password_hash(user['password_hash'], form.password.data):
                     logger.warning(f"Login attempt failed for username: {username} (invalid password)")
                     flash(trans('general_invalid_password', default='Incorrect password'), 'danger')
                     return render_template('users/login.html', form=form, title=trans('general_login', lang=session.get('lang', 'en'))), 401
@@ -415,7 +415,7 @@ def signup():
             user_data = {
                 '_id': username,
                 'email': email,
-                'password': generate_password_hash(form.password.data),
+                'password_hash': generate_password_hash(form.password.data),
                 'role': role,
                 'language': language,
                 'dark_mode': False,
@@ -549,7 +549,7 @@ def reset_password():
                 return render_template('users/reset_password.html', form=form, token=token, title=trans('general_reset_password', lang=session.get('lang', 'en')))
             db.users.update_one(
                 {'_id': user['_id']},
-                {'$set': {'password': generate_password_hash(form.password.data)},
+                {'$set': {'password_hash': generate_password_hash(form.password.data)},
                  '$unset': {'reset_token': '', 'reset_token_expiry': ''}}
             )
             log_audit_action('reset_password', {'user_id': user['_id']})
