@@ -6,9 +6,16 @@
         <h1>{{ t('creditors_manage_title', default='Manage Creditors') }}</h1>
         <small class="subtext">{{ t('creditors_what_you_owe_subtext', default='Kuɗin da Mutane ke Bin Ka') }}</small>
     </div>
+    {% if not can_interact %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            {{ t('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.') }}
+            <a href="{{ url_for('subscribe_bp.subscribe') }}" class="alert-link">{{ t('general_subscribe_now', default='Subscribe Now') }}</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ t('general_close', default='Close') }}"></button>
+        </div>
+    {% endif %}
     <div class="d-flex gap-2 mb-4">
         <a href="{{ url_for('creditors.index') }}" class="btn btn-secondary">{{ t('general_back', default='Back') }}</a>
-        <a href="{{ url_for('creditors.add') }}" class="btn btn-primary">{{ t('creditors_create_what_you_owe', default='Create What You Owe') }}</a>
+        <a href="{{ url_for('creditors.add') }}" class="btn btn-primary" {% if not can_interact %}disabled{% endif %}>{{ t('creditors_create_what_you_owe', default='Create What You Owe') }}</a>
     </div>
     {% if creditors|length > 0 %}
         <div class="mb-4">
@@ -38,7 +45,8 @@
                                 <a href="{{ url_for('creditors.edit', id=creditor._id) }}" 
                                    class="btn btn-primary btn-sm"
                                    data-bs-toggle="tooltip" 
-                                   title="{{ t('general_edit', default='Edit') }}">
+                                   title="{{ t('general_edit', default='Edit') }}"
+                                   {% if not can_interact %}disabled{% endif %}>
                                     {{ t('general_edit', default='Edit') }}
                                 </a>
                                 <form action="{{ url_for('creditors.delete', id=creditor._id) }}" method="POST" class="d-inline">
@@ -46,7 +54,8 @@
                                     <button type="submit" class="btn btn-danger btn-sm" 
                                             onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
                                             data-bs-toggle="tooltip" 
-                                            title="{{ t('general_delete', default='Delete') }}">
+                                            title="{{ t('general_delete', default='Delete') }}"
+                                            {% if not can_interact %}disabled{% endif %}>
                                         {{ t('general_delete', default='Delete') }}
                                     </button>
                                 </form>
@@ -59,7 +68,8 @@
                                         data-contact="{{ creditor.contact }}" 
                                         data-date="{{ format_date(creditor.created_at) }}"
                                         data-bs-toggle="tooltip" 
-                                        title="{{ t('creditors_send_delivery_reminder', default='Send Delivery Reminder') }}">
+                                        title="{{ t('creditors_send_delivery_reminder', default='Send Delivery Reminder') }}"
+                                        {% if not can_interact %}disabled{% endif %}>
                                     {{ t('general_reminder', default='Reminder') }}
                                 </button>
                                 <button type="button" 
@@ -67,7 +77,8 @@
                                         data-id="{{ creditor._id }}" 
                                         data-name="{{ creditor.name }}"
                                         data-bs-toggle="tooltip" 
-                                        title="{{ t('general_snooze_reminder', default='Snooze Reminder') }}">
+                                        title="{{ t('general_snooze_reminder', default='Snooze Reminder') }}"
+                                        {% if not can_interact %}disabled{% endif %}>
                                     {{ t('general_snooze', default='Snooze') }}
                                 </button>
                                 <button type="button" 
@@ -75,14 +86,16 @@
                                         data-id="{{ creditor._id }}" 
                                         data-contact="{{ creditor.contact }}"
                                         data-bs-toggle="tooltip" 
-                                        title="{{ t('general_share_iou', default='Share IOU') }}">
+                                        title="{{ t('general_share_iou', default='Share IOU') }}"
+                                        {% if not can_interact %}disabled{% endif %}>
                                     {{ t('general_share_iou', default='Share IOU') }}
                                 </button>
                                 {% endif %}
                                 <a href="{{ url_for('creditors.generate_iou', id=creditor._id) }}" 
                                    class="btn btn-success btn-sm"
                                    data-bs-toggle="tooltip" 
-                                   title="{{ t('general_download_iou', default='Download IOU') }}">
+                                   title="{{ t('general_download_iou', default='Download IOU') }}"
+                                   {% if not can_interact %}disabled{% endif %}>
                                     {{ t('general_download_iou', default='Download IOU') }}
                                 </a>
                             </td>
@@ -111,20 +124,20 @@
                 <form id="reminderForm">
                     <div class="mb-3">
                         <label for="reminderType" class="form-label">{{ t('general_reminder_type', default='Reminder Type') }}</label>
-                        <select class="form-select" id="reminderType" required>
+                        <select class="form-select" id="reminderType" required {% if not can_interact %}disabled{% endif %}>
                             <option value="sms">{{ t('general_sms', default='SMS') }}</option>
                             <option value="whatsapp">{{ t('general_whatsapp', default='WhatsApp') }}</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="reminderMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
-                        <textarea class="form-control" id="reminderMessage" rows="4" required></textarea>
+                        <textarea class="form-control" id="reminderMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
                         <div class="form-text">{{ t('general_reminder_cost', default='Cost: 2 coins per reminder') }}</div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="sendReminderBtn">
+                <button type="button" class="btn btn-primary" id="sendReminderBtn" {% if not can_interact %}disabled{% endif %}>
                     {{ t('general_send_reminder', default='Send Reminder') }}
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -147,7 +160,7 @@
                 <form id="snoozeForm">
                     <div class="mb-3">
                         <label for="snoozeDays" class="form-label">{{ t('general_snooze_duration', default='Snooze Duration') }}</label>
-                        <select class="form-select" id="snoozeDays" required>
+                        <select class="form-select" id="snoozeDays" required {% if not can_interact %}disabled{% endif %}>
                             <option value="1">{{ t('general_1_day', default='1 Day') }}</option>
                             <option value="3">{{ t('general_3_days', default='3 Days') }}</option>
                             <option value="7">{{ t('general_7_days', default='7 Days') }}</option>
@@ -158,7 +171,7 @@
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="snoozeReminderBtn">
+                <button type="button" class="btn btn-primary" id="snoozeReminderBtn" {% if not can_interact %}disabled{% endif %}>
                     {{ t('general_snooze', default='Snooze') }}
                 </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -173,6 +186,8 @@
 {% block page_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const canInteract = {{ can_interact | tojson }};
+
     // Initialize tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
@@ -203,6 +218,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Reminder button functionality
     document.querySelectorAll('.reminder-btn').forEach(button => {
         button.addEventListener('click', () => {
+            if (!canInteract) {
+                return;
+            }
             console.log('Reminder button clicked:', button.dataset.id); // Debug
             const name = button.dataset.name;
             const amount = parseFloat(button.dataset.amount).toLocaleString();
@@ -226,6 +244,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Send reminder functionality
     document.getElementById('sendReminderBtn').addEventListener('click', function() {
+        if (!canInteract) {
+            return;
+        }
         if (!currentCreditorData) {
             console.error('No creditor data available');
             return;
@@ -278,6 +299,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Snooze button functionality
     document.querySelectorAll('.snooze-btn').forEach(button => {
         button.addEventListener('click', () => {
+            if (!canInteract) {
+                return;
+            }
             console.log('Snooze button clicked:', button.dataset.id); // Debug
             currentCreditorData = {
                 _id: button.dataset.id,
@@ -290,6 +314,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Snooze reminder functionality
     document.getElementById('snoozeReminderBtn').addEventListener('click', function() {
+        if (!canInteract) {
+            return;
+        }
         if (!currentCreditorData) {
             console.error('No creditor data available');
             return;
@@ -334,6 +361,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Share IOU functionality
     document.querySelectorAll('.share-btn').forEach(button => {
         button.addEventListener('click', () => {
+            if (!canInteract) {
+                return;
+            }
             console.log('Share button clicked:', button.dataset.id); // Debug
             const debtId = button.dataset.id;
             const contact = button.dataset.contact;
