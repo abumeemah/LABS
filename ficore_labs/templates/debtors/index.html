@@ -7,8 +7,14 @@
         <small class="subtext">{{ t('debtors_subtitle', default='Kuɗin da Kake Bin Wasu') }}</small>
     </div>
     <div class="mb-4">
-        <a href="{{ url_for('debtors.add') }}" class="btn btn-secondary">{{ t('debtors_create_title', default='Create What They Owe You') }}</a>
-        <a href="{{ url_for('debtors.manage') }}" class="btn btn-primary">{{ t('debtors_manage', default='Manage Debtors') }}</a>
+        <a href="{{ url_for('debtors.add') }}" 
+           class="btn btn-secondary" 
+           {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to create debtors.') }}"{% endif %}>
+            {{ t('debtors_create_title', default='Create What They Owe You') }}
+        </a>
+        <a href="{{ url_for('debtors.manage') }}" class="btn btn-primary">
+            {{ t('debtors_manage', default='Manage Debtors') }}
+        </a>
     </div>
     {% if debtors|length > 0 %}
         <div class="table-responsive">
@@ -41,7 +47,8 @@
                                         data-contact="{{ debtor.contact or '' }}"
                                         data-date="{{ format_date(debtor.created_at) }}"
                                         data-reminders="{{ debtor.get('reminder_count', 0) }}"
-                                        data-description="{{ debtor.description or '' }}">
+                                        data-description="{{ debtor.description or '' }}"
+                                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to manage debtors.') }}"{% endif %}>
                                     {{ t('general_actions', default='Actions') }}
                                 </button>
                             </td>
@@ -82,9 +89,18 @@
             </div>
             <div class="modal-footer">
                 <a id="viewBtn" class="btn btn-primary" href="#">{{ t('general_view', default='View') }}</a>
-                <button id="reminderBtn" class="btn btn-primary" style="display: none;">{{ t('debtors_reminder', default='Reminder') }}</button>
-                <button id="snoozeBtn" class="btn btn-primary" style="display: none;">{{ t('debtors_snooze', default='Snooze') }}</button>
-                <button id="shareBtn" class="btn btn-primary" style="display: none;">{{ t('general_share', default='Share') }}</button>
+                <button id="reminderBtn" class="btn btn-primary" style="display: none;" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                    {{ t('debtors_reminder', default='Reminder') }}
+                </button>
+                <button id="snoozeBtn" class="btn btn-primary" style="display: none;" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                    {{ t('debtors_snooze', default='Snooze') }}
+                </button>
+                <button id="shareBtn" class="btn btn-primary" style="display: none;" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to share IOUs.') }}"{% endif %}>
+                    {{ t('general_share', default='Share') }}
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_close', default='Close') }}</button>
             </div>
         </div>
@@ -103,21 +119,25 @@
                 <form id="reminderForm">
                     <div class="mb-3">
                         <label for="reminderType" class="form-label">{{ t('debtors_reminder_type', default='Reminder Type') }}</label>
-                        <select class="form-select" id="reminderType" required>
+                        <select class="form-select" id="reminderType" required {% if not can_interact %}disabled{% endif %}>
                             <option value="sms">{{ t('general_sms', default='SMS') }}</option>
                             <option value="whatsapp">{{ t('general_whatsapp', default='WhatsApp') }}</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="reminderMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
-                        <textarea class="form-control" id="reminderMessage" rows="4" required></textarea>
-                        <div class="form-text">{{ t('debtors_reminder_cost', default='Cost: 2 coins per reminder') }}</div>
+                        <textarea class="form-control" id="reminderMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="sendReminderBtn">{{ t('debtors_send_reminder', default='Send Reminder') }}</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_cancel', default='Cancel') }}</button>
+                <button type="button" class="btn btn-primary" id="sendReminderBtn" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                    {{ t('debtors_send_reminder', default='Send Reminder') }}
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {{ t('general_cancel', default='Cancel') }}
+                </button>
             </div>
         </div>
     </div>
@@ -135,19 +155,23 @@
                 <form id="snoozeForm">
                     <div class="mb-3">
                         <label for="snoozeDays" class="form-label">{{ t('debtors_snooze_duration', default='Snooze Duration') }}</label>
-                        <select class="form-select" id="snoozeDays" required>
+                        <select class="form-select" id="snoozeDays" required {% if not can_interact %}disabled{% endif %}>
                             <option value="1">{{ t('general_1_day', default='1 Day') }}</option>
                             <option value="3">{{ t('general_3_days', default='3 Days') }}</option>
                             <option value="7">{{ t('general_7_days', default='7 Days') }}</option>
                             <option value="14">{{ t('general_14_days', default='14 Days') }}</option>
                         </select>
-                        <div class="form-text">{{ t('debtors_snooze_cost', default='Cost: 1 coin per snooze') }}</div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="snoozeReminderBtn">{{ t('debtors_snooze', default='Snooze') }}</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_cancel', default='Cancel') }}</button>
+                <button type="button" class="btn btn-primary" id="snoozeReminderBtn" 
+                        {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.') }}"{% endif %}>
+                    {{ t('debtors_snooze', default='Snooze') }}
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    {{ t('general_cancel', default='Cancel') }}
+                </button>
             </div>
         </div>
     </div>
@@ -266,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('reminderBtn').style.display = currentDebtData.contact ? 'inline-block' : 'none';
             document.getElementById('snoozeBtn').style.display = currentDebtData.contact ? 'inline-block' : 'none';
             document.getElementById('shareBtn').style.display = currentDebtData.contact ? 'inline-block' : 'none';
-            document.getElementById('viewBtn').href = `/debtors/view/${currentDebtData._id}`;
+            document.getElementById('viewBtn').href = `/debtors/view_page/${currentDebtData._id}`;
 
             // Update button classes based on visibility
             updateModalButtonClasses();
