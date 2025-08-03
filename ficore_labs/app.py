@@ -520,3 +520,10 @@ def create_app():
         if current_user.is_authenticated:
             session['last_activity'] = datetime.now(timezone.utc).isoformat()  # Updated to timezone-aware
             session.modified = True
+return app
+
+app = create_app()
+
+if __name__ == '__main__':
+    logger.info('Starting Flask application')
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
