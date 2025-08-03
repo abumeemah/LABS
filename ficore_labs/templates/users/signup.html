@@ -10,7 +10,7 @@
                     <div class="alert alert-{{ messages[0][1] }} alert-dismissible fade show" role="alert" aria-live="assertive">
                         {{ messages[0][0] | escape }}
                         {% if messages[0][1] in ['danger', 'error'] %}
-                            <p>{{ t('general_check_details', default='Please check your email and username for typos (e.g., ensure you used @gmail.com, not @gmai.com).') | escape }}</p>
+                            <p>{{ t('general_check_details', default='Please check your email and username for typos (e.g., ensure you used @gmail.com, not @gmai.com).') | safe }}</p>
                         {% endif %}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="{{ t('general_close', default='Close') | escape }}"></button>
                     </div>
