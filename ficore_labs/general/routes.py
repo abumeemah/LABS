@@ -29,7 +29,7 @@ def landing():
         current_app.logger.error(f"Error rendering landing page: {str(e)}", extra={'session_id': session.get('sid', 'unknown')})
         flash(trans('general_error', default='An error occurred'), 'danger')
         response = make_response(render_template(
-            'general/error.html',
+            'error/500.html',
             error_message="Unable to load the landing page due to an internal error.",
             title=trans('general_welcome', lang=session.get('lang', 'en'), default='Welcome')
         ), 500)
@@ -84,7 +84,7 @@ def privacy():
     except TemplateNotFound as e:
         current_app.logger.error(f'Template not found: {str(e)}', exc_info=True)
         return render_template(
-            'general/error.html',
+            'error/500.html',
             error=str(e),
             title=trans('general_privacy', lang=lang, default='Privacy Policy')
         ), 404
@@ -101,7 +101,7 @@ def terms():
     except TemplateNotFound as e:
         current_app.logger.error(f'Template not found: {str(e)}', exc_info=True)
         return render_template(
-            'general/error.html',
+            'error/500.html',
             error=str(e),
             title=trans('general_terms', lang=lang, default='Terms of Service')
         ), 404
@@ -118,7 +118,7 @@ def business_finance_tips():
     except TemplateNotFound as e:
         current_app.logger.error(f'Template not found: {str(e)}', exc_info=True)
         return render_template(
-            'general/error.html',
+            'error/500.html',
             error=str(e),
             title=trans('business_finance_tips_title', lang=lang, default='Business Finance Tips')
         ), 404
@@ -210,7 +210,8 @@ def feedback():
                 return render_template('general/feedback.html', tool_options=tool_options, title=trans('general_feedback', lang=lang)), 500
             except TemplateNotFound as e:
                 current_app.logger.error(f'Template not found: {str(e)}', exc_info=True)
-                return render_template('general/error.html', error=str(e), title=trans('general_feedback', lang=lang)), 500
+                return render_template('error/500.html', error=str(e), title=trans('general_feedback', lang=lang)), 500
     
     # Handle GET request
     return render_template('general/feedback.html', tool_options=tool_options, title=trans('general_feedback', lang=lang))
+
