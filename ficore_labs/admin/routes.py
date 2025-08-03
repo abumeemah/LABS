@@ -511,6 +511,24 @@ def manage_funds():
         fund['_id'] = str(fund['_id'])
     return render_template('admin/funds.html', form=form, funds=funds, title=trans('admin_funds_title', default='Manage Funds'))
 
+@admin_bp.route('/kyc', methods=['GET'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_kyc():
+    """View and manage KYC submissions."""
+    try:
+        db = utils.get_mongo_db()
+        kyc_records = list(db.kyc_records.find().sort('created_at', -1))
+        for record in kyc_records:
+            record['_id'] = str(record['_id'])
+        return render_template('kyc/admin.html', kyc_records=kyc_records, title=trans('admin_kyc_title', default='Manage KYC Submissions'))
+    except Exception as e:
+        logger.error(f"Error fetching KYC records for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('kyc/admin.html', kyc_records=[]), 500
+
 @admin_bp.route('/reports/customers', methods=['GET'])
 @login_required
 @utils.requires_role('admin')
