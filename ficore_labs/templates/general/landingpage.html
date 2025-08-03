@@ -57,7 +57,7 @@
         <h3 class="section-title">{{ t('general_our_tools', default='Explore Our Tools') | e }}</h3>
         <p class="text-muted">{{ t('general_tools_desc', default='Powerful tools to manage your finances effectively.') | e }}</p>
         {% if explore_features_for_template %}
-            {% set categories = ['Personal', 'Business', 'Agent'] %}
+            {% set categories = ['Business', 'Startup'] %}
             {% for category in categories %}
                 {% set category_tools = explore_features_for_template | selectattr('category', 'equalto', category) | list %}
                 {% if category_tools %}
