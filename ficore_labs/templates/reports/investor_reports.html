@@ -6,14 +6,14 @@
     <h1>{{ t('reports_investor_reports', default='Investor Reports') }}</h1>
     <small class="text-muted">{{ t('investor_reports_description', default='Generate financial reports for investors with key metrics.') }}</small>
     
-    {% if read_only %}
+    {% if not can_interact %}
     <div class="alert alert-warning mt-3">
         {{ t('read_only_mode', default='Your trial has expired. You can view your data but cannot generate new reports. Subscribe to continue.') }}
         <a href="{{ url_for('subscribe.index') }}" class="btn btn-primary btn-sm ms-2">{{ t('subscribe_now', default='Subscribe Now') }}</a>
     </div>
     {% endif %}
 
-    {% if not read_only %}
+    {% if can_interact %}
     <form method="POST" class="mt-4">
         {{ form.hidden_tag() }}
         <div class="row g-3">
@@ -40,7 +40,6 @@
     <div class="table-responsive mt-4">
         <table class="table table-striped">
             <thead>
--setting up the environment for the table
                 <tr>
                     <th>{{ t('general_date', default='Date') }}</th>
                     <th>{{ t('investor_report_title', default='Report Title') }}</th>
