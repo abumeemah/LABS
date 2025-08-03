@@ -3,7 +3,7 @@ import logging
 import uuid
 import os
 import certifi
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import session, has_request_context, current_app, url_for, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -528,6 +528,39 @@ def is_admin():
     except Exception:
         return False
 
+def can_user_interact(user):
+    """
+    Determines if a user can interact with features based on their subscription or trial status.
+    
+    Args:
+        user: The current user object (e.g., flask_login.current_user).
+        
+    Returns:
+        bool: True if the user can interact (active subscription or trial), False otherwise.
+    """
+    try:
+        with current_app.app_context():
+            if not user or not user.is_authenticated:
+                logger.info("User interaction denied: No authenticated user")
+                return False
+            if user.role == 'admin':
+                logger.info(f"User {user.id} allowed to interact: Admin role")
+                return True
+            if user.get('is_subscribed', False):
+                logger.info(f"User {user.id} allowed to interact: Active subscription")
+                return True
+            if user.get('is_trial', False):
+                trial_end = user.get('trial_end')
+                if trial_end and trial_end > datetime.utcnow():
+                    logger.info(f"User {user.id} allowed to interact: Active trial")
+                    return True
+                logger.info(f"User {user.id} trial expired: {trial_end}")
+            logger.info(f"User {user.id} interaction denied: No active subscription or trial")
+            return False
+    except Exception as e:
+        logger.error(f"Error checking user interaction for user {user.get('id', 'unknown')}: {str(e)}")
+        return False
+
 def format_currency(amount, currency='₦', lang=None, include_symbol=True):
     try:
         with current_app.app_context():
@@ -614,9 +647,10 @@ def log_user_action(action, details=None, user_id=None):
 
 __all__ = [
     'clean_currency', 'log_tool_usage', 'get_limiter', 'create_anonymous_session', 
-    'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin', 'format_currency', 
-    'format_date', 'sanitize_input', 'generate_unique_id', 'validate_required_fields',
-    'get_user_language', 'log_user_action', 'initialize_tools_with_urls', 
-    'UNAUTHENTICATED_NAV', 'TRADER_TOOLS', 'TRADER_NAV', 'STARTUP_TOOLS', 
-    'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 'ALL_TOOLS', 'get_explore_features'
+    'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin', 'can_user_interact',
+    'format_currency', 'format_date', 'sanitize_input', 'generate_unique_id', 
+    'validate_required_fields', 'get_user_language', 'log_user_action', 
+    'initialize_tools_with_urls', 'UNAUTHENTICATED_NAV', 'TRADER_TOOLS', 
+    'TRADER_NAV', 'STARTUP_TOOLS', 'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 
+    'ALL_TOOLS', 'get_explore_features'
 ]
