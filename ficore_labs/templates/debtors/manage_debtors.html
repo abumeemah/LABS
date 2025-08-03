@@ -7,8 +7,14 @@
         <small class="subtext">{{ t('debtors_subtitle', default='Kuɗin da Kake Bin Wasu') }}</small>
     </div>
     <div class="mb-4">
-        <a href="{{ url_for('debtors.index') }}" class="btn btn-secondary">{{ t('general_back', default='Back') }}</a>
-        <a href="{{ url_for('debtors.add') }}" class="btn btn-primary">{{ t('debtors_create_title', default='Create What They Owe You') }}</a>
+        <a href="{{ url_for('debtors.index') }}" class="btn btn-secondary">
+            {{ t('general_back', default='Back') }}
+        </a>
+        <a href="{{ url_for('debtors.add') }}" 
+           class="btn btn-primary" 
+           {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to create debtors.') }}"{% endif %}>
+            {{ t('debtors_create_title', default='Create What They Owe You') }}
+        </a>
     </div>
     {% if debtors|length > 0 %}
         <div class="mb-4">
@@ -36,7 +42,8 @@
                                 <a href="{{ url_for('debtors.edit', id=debtor._id) }}" 
                                    class="btn btn-primary btn-sm"
                                    data-bs-toggle="tooltip" 
-                                   title="{{ t('general_edit', default='Edit') }}">
+                                   title="{{ t('general_edit', default='Edit') }}"
+                                   {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to edit debtors.') }}"{% endif %}>
                                     {{ t('general_edit', default='Edit') }}
                                 </a>
                                 <form action="{{ url_for('debtors.delete', id=debtor._id) }}" method="POST" class="d-inline">
@@ -44,7 +51,8 @@
                                     <button type="submit" class="btn btn-danger btn-sm" 
                                             onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
                                             data-bs-toggle="tooltip" 
-                                            title="{{ t('general_delete', default='Delete') }}">
+                                            title="{{ t('general_delete', default='Delete') }}"
+                                            {% if not can_interact %}disabled data-bs-toggle="tooltip" title="{{ t('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to delete debtors.') }}"{% endif %}>
                                         {{ t('general_delete', default='Delete') }}
                                     </button>
                                 </form>
