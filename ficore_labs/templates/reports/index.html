@@ -6,7 +6,7 @@
     <div class="page-title mb-4">
         <h1>{{ t('reports_title', default='Reports') }}</h1>
         <small class="subtext">{{ t('reports_subtitle', default='Business Financial Reports') }}</small>
-        {% if not is_subscribed and not is_trial_active %}
+        {% if not can_interact %}
         <div class="alert alert-warning mt-3">
             {{ t('subscription_required', default='Your trial has expired. Subscribe to continue managing your data or view your reports below in read-only mode.') }}
             <a href="{{ url_for('subscribe.index') }}" class="btn btn-primary btn-sm ms-2">{{ t('subscribe_now', default='Subscribe Now') }}</a>
