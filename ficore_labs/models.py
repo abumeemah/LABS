@@ -32,7 +32,7 @@ def get_db():
 def initialize_app_data(app):
     """
     Initialize MongoDB collections, indexes, and perform one-off migrations for business finance modules.
-    Creates a default admin account if it doesn't exist.
+    Creates a default admin account if it doesn't exist, ensuring password is hashed.
     
     Args:
         app: Flask application instance
@@ -60,16 +60,16 @@ def initialize_app_data(app):
             logger.info(f"MongoDB database: {db_instance.name}", extra={'session_id': 'no-session-id'})
             collections = db_instance.list_collection_names()
             
-            # Create default admin user if it doesn't exist
+            # Create or update default admin user if it doesn't exist or lacks required fields
             admin_user = db_instance.users.find_one({'_id': 'admin', 'role': 'admin'})
-            if not admin_user:
+            if not admin_user or 'password_hash' not in admin_user:
                 # Check if user with _id 'ficorerecords' exists
                 ficore_user = db_instance.users.find_one({'_id': 'ficorerecords'})
                 if not ficore_user:
                     admin_data = {
                         '_id': 'admin',
                         'email': 'ficorerecords@gmail.com',
-                        'password': 'Admin123!',
+                        'password_hash': generate_password_hash('Admin123!'),  # Hash the password
                         'role': 'admin',
                         'is_admin': True,
                         'display_name': 'Admin',
@@ -83,17 +83,27 @@ def initialize_app_data(app):
                         'created_at': datetime.utcnow()
                     }
                     try:
-                        created_user = create_user(db_instance, admin_data)
-                        logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
+                        if admin_user:
+                            # Update existing admin user if missing password_hash
+                            db_instance.users.update_one(
+                                {'_id': 'admin'},
+                                {'$set': admin_data, '$unset': {'password': ''}},
+                                upsert=True
+                            )
+                            logger.info(f"Updated default admin user: {admin_data['_id']}", extra={'session_id': 'no-session-id'})
+                        else:
+                            # Create new admin user
+                            created_user = create_user(db_instance, admin_data)
+                            logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
                     except DuplicateKeyError:
-                        logger.info(f"Admin user creation skipped due to existing user with same email or ID", extra={'session_id': 'no-session-id'})
+                        logger.info(f"Admin user creation/update skipped due to existing user with same email or ID", extra={'session_id': 'no-session-id'})
                     except Exception as e:
-                        logger.error(f"Failed to create default admin user: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
+                        logger.error(f"Failed to create/update default admin user: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
                         raise
                 else:
                     logger.info(f"User with ID 'ficorerecords' already exists, skipping admin creation", extra={'session_id': 'no-session-id'})
             else:
-                logger.info(f"Admin user with ID 'admin' already exists, skipping creation", extra={'session_id': 'no-session-id'})
+                logger.info(f"Admin user with ID 'admin' already exists with valid password_hash, skipping creation", extra={'session_id': 'no-session-id'})
             
             # Drop unused collections (one-off migration)
             unused_collections = [
