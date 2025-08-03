@@ -407,11 +407,20 @@ def create_app():
     @app.route('/')
     @ensure_session_id
     def index():
-        if current_user.is_authenticated:
-            if current_user.role == 'admin':
-                return redirect(url_for('admin.index'))
-            return redirect(url_for('dashboard.index'))
-        return redirect(url_for('users.login'))
+        try:
+            current_app.logger.info(
+                f"Accessing root route - User: {current_user.id if current_user.is_authenticated else 'Anonymous'}, "
+                f"Authenticated: {current_user.is_authenticated}, Session: {dict(session)}"
+            )
+            if current_user.is_authenticated:
+                if current_user.role == 'admin':
+                    return redirect(url_for('admin.index'))
+                return redirect(url_for('dashboard.index'))
+            return redirect(url_for('general_bp.landing'))
+        except Exception as e:
+            current_app.logger.error(f"Error in root route: {str(e)}", extra={'session_id': session.get('sid', 'unknown')})
+            flash(trans('general_error', default='An error occurred'), 'danger')
+            return render_template('error/500.html', error_message="Unable to process request.", title="Error"), 500
 
     @app.route('/health')
     @limiter.limit('10 per minute')
