@@ -63,28 +63,35 @@ def initialize_app_data(app):
             # Create default admin user if it doesn't exist
             admin_user = db_instance.users.find_one({'_id': 'admin', 'role': 'admin'})
             if not admin_user:
-                admin_data = {
-                    '_id': 'admin',
-                    'email': 'ficorerecords@gmail.com',
-                    'password': 'Admin123!',
-                    'role': 'admin',
-                    'is_admin': True,
-                    'display_name': 'Admin',
-                    'setup_complete': True,
-                    'language': 'en',
-                    'is_trial': False,
-                    'is_subscribed': True,
-                    'subscription_plan': 'admin',
-                    'subscription_start': datetime.utcnow(),
-                    'subscription_end': None,
-                    'created_at': datetime.utcnow()
-                }
-                try:
-                    created_user = create_user(db_instance, admin_data)
-                    logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
-                except Exception as e:
-                    logger.error(f"Failed to create default admin user: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
-                    raise
+                # Check if user with _id 'ficorerecords' exists
+                ficore_user = db_instance.users.find_one({'_id': 'ficorerecords'})
+                if not ficore_user:
+                    admin_data = {
+                        '_id': 'admin',
+                        'email': 'ficorerecords@gmail.com',
+                        'password': 'Admin123!',
+                        'role': 'admin',
+                        'is_admin': True,
+                        'display_name': 'Admin',
+                        'setup_complete': True,
+                        'language': 'en',
+                        'is_trial': False,
+                        'is_subscribed': True,
+                        'subscription_plan': 'admin',
+                        'subscription_start': datetime.utcnow(),
+                        'subscription_end': None,
+                        'created_at': datetime.utcnow()
+                    }
+                    try:
+                        created_user = create_user(db_instance, admin_data)
+                        logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
+                    except DuplicateKeyError:
+                        logger.info(f"Admin user creation skipped due to existing user with same email or ID", extra={'session_id': 'no-session-id'})
+                    except Exception as e:
+                        logger.error(f"Failed to create default admin user: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
+                        raise
+                else:
+                    logger.info(f"User with ID 'ficorerecords' already exists, skipping admin creation", extra={'session_id': 'no-session-id'})
             else:
                 logger.info(f"Admin user with ID 'admin' already exists, skipping creation", extra={'session_id': 'no-session-id'})
             
