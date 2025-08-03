@@ -14,6 +14,7 @@ import random
 from itsdangerous import URLSafeTimedSerializer
 import utils
 from translations import trans
+from app import User  # Import User class from app.py
 
 logger = logging.getLogger(__name__)
 
@@ -265,8 +266,22 @@ def login():
                         return redirect(url_for('users.verify_2fa'))
                     except Exception as e:
                         logger.warning(f"Email delivery or formatting failed for OTP for {username}: {str(e)}. Allowing login without 2FA for testing.")
-                        from app import User
-                        user_obj = User(user['_id'], user['email'], user.get('display_name'), user.get('role', 'trader'))
+                        user_obj = User(
+                            id=user['_id'],
+                            email=user['email'],
+                            display_name=user.get('display_name'),
+                            role=user.get('role', 'trader'),
+                            is_admin=user.get('is_admin', False),
+                            setup_complete=user.get('setup_complete', False),
+                            language=user.get('language', 'en'),
+                            is_trial=user.get('is_trial', True),
+                            trial_start=user.get('trial_start'),
+                            trial_end=user.get('trial_end'),
+                            is_subscribed=user.get('is_subscribed', False),
+                            subscription_plan=user.get('subscription_plan'),
+                            subscription_start=user.get('subscription_start'),
+                            subscription_end=user.get('subscription_end')
+                        )
                         login_user(user_obj, remember=form.remember.data)
                         session['lang'] = user.get('language', 'en')
                         session.pop('is_anonymous', None)
@@ -277,8 +292,22 @@ def login():
                             setup_route = get_setup_wizard_route(user.get('role', 'trader'))
                             return redirect(url_for(setup_route))
                         return redirect(get_post_login_redirect(user.get('role', 'trader')))
-                from app import User
-                user_obj = User(user['_id'], user['email'], user.get('display_name'), user.get('role', 'trader'))
+                user_obj = User(
+                    id=user['_id'],
+                    email=user['email'],
+                    display_name=user.get('display_name'),
+                    role=user.get('role', 'trader'),
+                    is_admin=user.get('is_admin', False),
+                    setup_complete=user.get('setup_complete', False),
+                    language=user.get('language', 'en'),
+                    is_trial=user.get('is_trial', True),
+                    trial_start=user.get('trial_start'),
+                    trial_end=user.get('trial_end'),
+                    is_subscribed=user.get('is_subscribed', False),
+                    subscription_plan=user.get('subscription_plan'),
+                    subscription_start=user.get('subscription_start'),
+                    subscription_end=user.get('subscription_end')
+                )
                 login_result = login_user(user_obj, remember=form.remember.data)
                 logger.debug(f"login_user result for {username}: {login_result}")
                 if not login_result:
@@ -294,7 +323,7 @@ def login():
                 if not user.get('setup_complete', False):
                     setup_route = get_setup_wizard_route(user.get('role', 'trader'))
                     return redirect(url_for(setup_route))
-                if user.get('trial_end_date') and user.get('trial_end_date') < datetime.utcnow() and not user.get('subscribed', False):
+                if user.get('trial_end') and user.get('trial_end') < datetime.utcnow() and not user.get('is_subscribed', False):
                     return redirect(url_for('subscribe_bp.subscribe'))
                 return redirect(get_post_login_redirect(user.get('role', 'trader')))
             except errors.PyMongoError as e:
@@ -343,8 +372,22 @@ def verify_2fa():
                 session.pop('pending_user_id', None)
                 return redirect(url_for('users.login'))
             if user.get('otp') == form.otp.data and user.get('otp_expiry') > datetime.utcnow():
-                from app import User
-                user_obj = User(user['_id'], user['email'], user.get('display_name'), user.get('role', 'trader'))
+                user_obj = User(
+                    id=user['_id'],
+                    email=user['email'],
+                    display_name=user.get('display_name'),
+                    role=user.get('role', 'trader'),
+                    is_admin=user.get('is_admin', False),
+                    setup_complete=user.get('setup_complete', False),
+                    language=user.get('language', 'en'),
+                    is_trial=user.get('is_trial', True),
+                    trial_start=user.get('trial_start'),
+                    trial_end=user.get('trial_end'),
+                    is_subscribed=user.get('is_subscribed', False),
+                    subscription_plan=user.get('subscription_plan'),
+                    subscription_start=user.get('subscription_start'),
+                    subscription_end=user.get('subscription_end')
+                )
                 login_user(user_obj, remember=True)
                 session.pop('is_anonymous', None)
                 session['is_anonymous'] = False
@@ -359,7 +402,7 @@ def verify_2fa():
                 if not user.get('setup_complete', False):
                     setup_route = get_setup_wizard_route(user.get('role', 'trader'))
                     return redirect(url_for(setup_route))
-                if user.get('trial_end_date') and user.get('trial_end_date') < datetime.utcnow() and not user.get('subscribed', False):
+                if user.get('trial_end') and user.get('trial_end') < datetime.utcnow() and not user.get('is_subscribed', False):
                     return redirect(url_for('subscribe_bp.subscribe'))
                 return redirect(get_post_login_redirect(user.get('role', 'trader')))
             flash(trans('general_invalid_otp', default='Invalid or expired OTP'), 'danger')
@@ -423,8 +466,13 @@ def signup():
                 'setup_complete': False,
                 'display_name': username,
                 'created_at': datetime.utcnow(),
-                'trial_end_date': datetime.utcnow() + timedelta(days=7),
-                'subscribed': False
+                'is_trial': True,
+                'trial_start': datetime.utcnow(),
+                'trial_end': datetime.utcnow() + timedelta(days=7),
+                'is_subscribed': False,
+                'subscription_plan': None,
+                'subscription_start': None,
+                'subscription_end': None
             }
 
             result = db.users.insert_one(user_data)
@@ -440,8 +488,22 @@ def signup():
                 'timestamp': datetime.utcnow()
             })
 
-            from app import User
-            user_obj = User(username, email, username, role)
+            user_obj = User(
+                id=username,
+                email=email,
+                display_name=username,
+                role=role,
+                is_admin=False,
+                setup_complete=False,
+                language=language,
+                is_trial=True,
+                trial_start=datetime.utcnow(),
+                trial_end=datetime.utcnow() + timedelta(days=7),
+                is_subscribed=False,
+                subscription_plan=None,
+                subscription_start=None,
+                subscription_end=None
+            )
             login_user(user_obj, remember=True)
             session['lang'] = language
             session.pop('is_anonymous', None)
@@ -584,7 +646,7 @@ def setup_wizard():
             return redirect(url_for('users.logout'))
 
         if user.get('setup_complete', False):
-            if user.get('trial_end_date') and user.get('trial_end_date') < datetime.utcnow() and not user.get('subscribed', False):
+            if user.get('trial_end') and user.get('trial_end') < datetime.utcnow() and not user.get('is_subscribed', False):
                 return redirect(url_for('subscribe_bp.subscribe'))
             return redirect(get_post_login_redirect(user.get('role', 'trader')))
 
@@ -619,7 +681,7 @@ def setup_wizard():
             log_audit_action('complete_setup_wizard', {'user_id': user_id, 'updated_by': current_user.id})
             logger.info(f"Business setup completed for user: {user_id} by {current_user.id}, session_id: {session.get('session_id')}")
             flash(trans('general_business_setup_success', default='Business setup completed'), 'success')
-            if user.get('trial_end_date') and user.get('trial_end_date') < datetime.utcnow() and not user.get('subscribed', False):
+            if user.get('trial_end') and user.get('trial_end') < datetime.utcnow() and not user.get('is_subscribed', False):
                 return redirect(url_for('subscribe_bp.subscribe'))
             return redirect(url_for('settings.profile', user_id=user_id) if utils.is_admin() else get_post_login_redirect(user.get('role', 'trader')))
         else:
@@ -676,39 +738,3 @@ def logout():
         response.set_cookie(current_app.config['SESSION_COOKIE_NAME'], '', expires=0, httponly=True, secure=current_app.config.get('SESSION_COOKIE_SECURE', True))
         return response
 
-@users_bp.route('/auth/signin')
-def signin():
-    try:
-        return redirect(url_for('users.login'))
-    except Exception as e:
-        logger.error(f"Error redirecting /auth/signin to login: {str(e)}")
-        flash(trans('general_error', default='An error occurred. Please try again.'), 'danger')
-        return redirect(url_for('users.login')), 500
-
-@users_bp.route('/auth/signup')
-def signup_redirect():
-    try:
-        return redirect(url_for('users.signup'))
-    except Exception as e:
-        logger.error(f"Error redirecting /auth/signup to signup: {str(e)}")
-        flash(trans('general_error', default='An error occurred. Please try again.'), 'danger')
-        return redirect(url_for('users.signup')), 500
-
-@users_bp.route('/auth/forgot-password')
-def forgot_password_redirect():
-    try:
-        return redirect(url_for('users.forgot_password'))
-    except Exception as e:
-        logger.error(f"Error redirecting /auth/forgot-password to forgot_password: {str(e)}")
-        flash(trans('general_error', default='An error occurred. Please try again.'), 'danger')
-        return redirect(url_for('users.forgot_password')), 500
-
-@users_bp.route('/auth/reset-password')
-def reset_password_redirect():
-    try:
-        token = request.args.get('token')
-        return redirect(url_for('users.reset_password', token=token))
-    except Exception as e:
-        logger.error(f"Error redirecting /auth/reset-password to reset_password: {str(e)}")
-        flash(trans('general_error', default='An error occurred. Please try again.'), 'danger')
-        return redirect(url_for('users.forgot_password')), 500
