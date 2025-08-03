@@ -364,23 +364,26 @@ def generate_tools_with_urls(tools):
 
 def get_explore_features():
     """
-    Returns a list of features for the landing page, categorized by Traders and Startups.
+    Returns a list of selected features for the landing page, categorized by Business and Startups, limited to three tools each.
     """
     try:
         features = []
-        # Trader Tools (from TRADER_TOOLS)
+        # Define selected tools for Business (Traders)
+        business_tool_keys = ["debtors_dashboard", "receipts_dashboard", "business_reports"]
         for tool in TRADER_TOOLS:
-            features.append({
-                "category": "Business",
-                "label_key": tool["label_key"],
-                "description_key": tool["description_key"],
-                "label": tool["label"],
-                "description": tool.get("description", "Description not available"),
-                "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
-            })
-        # Startup Tools (from STARTUP_TOOLS, selecting unique tools)
+            if tool["label_key"] in business_tool_keys:
+                features.append({
+                    "category": "Business",
+                    "label_key": tool["label_key"],
+                    "description_key": tool["description_key"],
+                    "label": tool["label"],
+                    "description": tool.get("description", "Description not available"),
+                    "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
+                })
+        # Define selected tools for Startups
+        startup_tool_keys = ["funds_dashboard", "forecasts_dashboard", "investor_reports_dashboard"]
         for tool in STARTUP_TOOLS:
-            if tool["label_key"] in ["funds_dashboard", "forecasts_dashboard", "investor_reports_dashboard"]:
+            if tool["label_key"] in startup_tool_keys:
                 features.append({
                     "category": "Startup",
                     "label_key": tool["label_key"],
@@ -389,7 +392,7 @@ def get_explore_features():
                     "description": tool.get("description", "Description not available"),
                     "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
                 })
-        logger.info("Successfully retrieved explore features for Traders and Startups")
+        logger.info("Successfully retrieved selected explore features for Business and Startups")
         return features
     except Exception as e:
         logger.error(f"Error retrieving explore features: {str(e)}")
