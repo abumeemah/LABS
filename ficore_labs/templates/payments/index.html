@@ -6,9 +6,12 @@
         <h1>{{ t('payments_title', default='Money Out') }}</h1>
         <small class="subtext">{{ t('payments_subtitle', default='Kuɗin Da Ka Biya Wasu') }}</small>
     </div>
-    <!-- Added Manage Payments button to mirror debtors -->
     <div class="mb-4">
-        <a href="{{ url_for('payments.add') }}" class="btn btn-secondary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% if can_interact %}
+            <a href="{{ url_for('payments.add') }}" class="btn btn-secondary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% else %}
+            <a href="{{ url_for('general_bp.subscription_required') }}" class="btn btn-secondary">{{ t('payments_add_title', default='Add Money Out') }}</a>
+        {% endif %}
         <a href="{{ url_for('payments.manage') }}" class="btn btn-primary">{{ t('payments_manage', default='Manage Payments') }}</a>
     </div>
     {% if payments|length > 0 %}
@@ -33,7 +36,6 @@
                             <td data-label="{{ t('payments_payment_method', default='Payment Method') }}">{{ payment.method or '-' }}</td>
                             <td data-label="{{ t('general_category', default='Category') }}">{{ payment.category or '-' }}</td>
                             <td data-label="{{ t('general_actions', default='Actions') }}">
-                                <!-- Replaced btn-group with single Actions button to trigger modal -->
                                 <button class="btn btn-secondary btn-sm actions-btn"
                                         data-bs-toggle="modal"
                                         data-bs-target="#actionsModal"
@@ -61,7 +63,6 @@
     {% endif %}
 </div>
 
-<!-- Actions Modal, adapted from debtors for payment actions -->
 <div class="modal fade" id="actionsModal" tabindex="-1" aria-labelledby="actionsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -85,15 +86,19 @@
             </div>
             <div class="modal-footer">
                 <a id="viewBtn" class="btn btn-primary" href="#">{{ t('general_view', default='View') }}</a>
-                <a id="downloadBtn" class="btn btn-primary" href="#">{{ t('payments_download_receipt', default='Download Receipt') }}</a>
-                <button id="shareBtn" class="btn btn-primary" style="display: none;">{{ t('payments_share_receipt', default='Share Receipt') }}</button>
+                {% if can_interact %}
+                    <a id="downloadBtn" class="btn btn-primary" href="#">{{ t('payments_download_receipt', default='Download Receipt') }}</a>
+                    <button id="shareBtn" class="btn btn-primary" style="display: none;">{{ t('payments_share_receipt', default='Share Receipt') }}</button>
+                {% else %}
+                    <a id="downloadBtn" class="btn btn-primary disabled" href="{{ url_for('general_bp.subscription_required') }}">{{ t('payments_download_receipt', default='Download Receipt') }}</a>
+                    <button id="shareBtn" class="btn btn-primary disabled" style="display: none;" onclick="alert('{{ t('payments_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to share payments.') }}')">{{ t('payments_share_receipt', default='Share Receipt') }}</button>
+                {% endif %}
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_close', default='Close') }}</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Share Modal, new addition for sharing payments -->
 <div class="modal fade" id="shareModal" tabindex="-1" aria-labelledby="shareModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -102,23 +107,28 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ t('general_close', default='Close') }}"></button>
             </div>
             <div class="modal-body">
-                <form id="shareForm">
+                {% if not can_interact %}
+                    <div class="alert alert-warning" role="alert">
+                        {{ t('payments_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to share payments.') }}
+                        <a href="{{ url_for('general_bp.subscription_required') }}" class="alert-link">{{ t('general_subscribe', default='Subscribe now') }}</a>
+                    </div>
+                {% endif %}
+                <form id="shareForm" {% if not can_interact %}onsubmit="return false;"{% endif %}>
                     <div class="mb-3">
                         <label for="shareType" class="form-label">{{ t('payments_share_type', default='Share Type') }}</label>
-                        <select class="form-select" id="shareType" required>
+                        <select class="form-select" id="shareType" required {% if not can_interact %}disabled{% endif %}>
                             <option value="sms">{{ t('general_sms', default='SMS') }}</option>
                             <option value="whatsapp">{{ t('general_whatsapp', default='WhatsApp') }}</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label for="shareMessage" class="form-label">{{ t('general_message', default='Message') }}</label>
-                        <textarea class="form-control" id="shareMessage" rows="4" required></textarea>
-                        <div class="form-text">{{ t('payments_share_cost', default='Cost: 2 coins per share') }}</div>
+                        <textarea class="form-control" id="shareMessage" rows="4" required {% if not can_interact %}disabled{% endif %}></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="sendShareBtn">{{ t('payments_share_receipt', default='Share Receipt') }}</button>
+                <button type="button" class="btn btn-primary" id="sendShareBtn" {% if not can_interact %}disabled{% endif %}>{{ t('payments_share_receipt', default='Share Receipt') }}</button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ t('general_cancel', default='Cancel') }}</button>
             </div>
         </div>
@@ -128,7 +138,6 @@
 
 {% block page_scripts %}
 <style>
-/* Reused modal button styling from debtors */
 .modal-footer .btn {
     padding: 0.75rem 1.5rem;
     border-radius: 10px;
@@ -163,13 +172,11 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tooltips
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
 
     let currentPaymentData = null;
 
-    // Function to update modal button classes
     function updateModalButtonClasses() {
         const modalFooter = document.querySelector('#actionsModal .modal-footer');
         const visibleButtons = Array.from(modalFooter.querySelectorAll('.btn')).filter(btn => btn.style.display !== 'none');
@@ -189,9 +196,107 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const viewBtn = document.getElementById('viewBtn');
             const downloadBtn = document.getElementById('downloadBtn');
-            const shareBtn = documentLink = `https://wa.me/?text=${encodeURIComponent(message)}`;
-                window.open(whatsappLink, '_blank');
+            const shareBtn = document.getElementById('shareBtn');
+            const closeBtn = modalFooter.querySelector('[data-bs-dismiss="modal"]');
+            [viewBtn, downloadBtn, shareBtn].forEach(btn => {
+                if (btn) {
+                    btn.classList.remove('btn-secondary');
+                    btn.classList.add('btn-primary');
+                }
+            });
+            if (closeBtn) {
+                closeBtn.classList.remove('btn-primary');
+                closeBtn.classList.add('btn-secondary');
             }
+        }
+    }
+
+    document.querySelectorAll('.actions-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            console.log('Actions button clicked:', button.dataset.id);
+            currentPaymentData = {
+                _id: button.dataset.id,
+                name: button.dataset.name,
+                amount: parseFloat(button.dataset.amount).toLocaleString(),
+                date: button.dataset.date,
+                method: button.dataset.method,
+                category: button.dataset.category,
+                description: button.dataset.description,
+                contact: button.dataset.contact
+            };
+
+            document.getElementById('modalName').textContent = currentPaymentData.name;
+            document.getElementById('modalAmount').textContent = `{{ t('general_currency_symbol', default='₦') }}${currentPaymentData.amount}`;
+            document.getElementById('modalMethod').textContent = currentPaymentData.method || '-';
+            document.getElementById('modalCategory').textContent = currentPaymentData.category || '-';
+            document.getElementById('modalDate').textContent = currentPaymentData.date;
+            document.getElementById('modalDescription').textContent = currentPaymentData.description || '-';
+
+            document.getElementById('viewBtn').href = `/payments/view/${currentPaymentData._id}`;
+            document.getElementById('downloadBtn').href = `/payments/generate_pdf/${currentPaymentData._id}`;
+            document.getElementById('shareBtn').style.display = currentPaymentData.contact ? 'inline-block' : 'none';
+
+            updateModalButtonClasses();
+        });
+    });
+
+    document.getElementById('shareBtn').addEventListener('click', () => {
+        if (!currentPaymentData) {
+            console.error('No payment data available');
+            return;
+        }
+        const defaultMessage = `Payment from FiCore Records\nRecipient: ${currentPaymentData.name}\nAmount: {{ t('general_currency_symbol', default='₦') }}${currentPaymentData.amount}\nDate: ${currentPaymentData.date}\nPayment ID: ${currentPaymentData._id}`;
+        document.getElementById('shareMessage').value = defaultMessage;
+        new bootstrap.Modal(document.getElementById('shareModal')).show();
+    });
+
+    document.getElementById('sendShareBtn').addEventListener('click', function() {
+        if (!currentPaymentData) {
+            console.error('No payment data available');
+            return;
+        }
+        
+        const shareType = document.getElementById('shareType').value;
+        const message = document.getElementById('shareMessage').value;
+        
+        if (!message.trim()) {
+            alert('{{ t('general_message_required', default='Message is required') }}');
+            return;
+        }
+        
+        this.disabled = true;
+        this.textContent = '{{ t('general_sending', default='Sending...') }}';
+        
+        fetch('/payments/share', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                paymentId: currentPaymentData._id,
+                recipient: currentPaymentData.contact,
+                message,
+                type: shareType
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('{{ t('payments_share_success', default='Payment shared successfully') }}');
+                bootstrap.Modal.getInstance(document.getElementById('shareModal')).hide();
+                bootstrap.Modal.getInstance(document.getElementById('actionsModal')).hide();
+            } else {
+                alert('{{ t('payments_share_failed', default='Failed to share payment') }}: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error sharing payment:', error);
+            alert('{{ t('payments_share_error', default='Error sharing payment') }}');
+        })
+        .finally(() => {
+            this.disabled = false;
+            this.textContent = '{{ t('payments_share_receipt', default='Share Receipt') }}';
         });
     });
 });
