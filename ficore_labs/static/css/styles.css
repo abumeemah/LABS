@@ -3413,3 +3413,7 @@ a.text-decoration-none:hover .btn-outline-primary {
     .dark-mode .login-page .links-container a:hover {
         color: #c7d2fe;
     }
+.app-logo {
+  max-width: 160px;
+  height: auto;
+}
