@@ -164,11 +164,11 @@ def get_setup_wizard_route(role):
         elif role == 'admin':
             return 'admin.dashboard'
         else:
-            logger.warning(f"Unknown role '{role}' for setup wizard route, defaulting to setup_wizard")
-            return 'users.setup_wizard'
+            logger.error(f"Invalid role '{role}' for setup wizard route")
+            raise ValueError(f"Invalid role: {role}")
     except Exception as e:
         logger.error(f"Error determining setup wizard route for role '{role}': {str(e)}")
-        return 'users.setup_wizard'
+        return 'users.logout'  # Redirect to logout for invalid roles
 
 def get_post_login_redirect(user_role):
     """Determine where to redirect user after login based on their role."""
@@ -180,11 +180,11 @@ def get_post_login_redirect(user_role):
         elif user_role == 'admin':
             return url_for('admin.dashboard')
         else:
-            logger.warning(f"Unknown role '{user_role}' for login redirect, defaulting to general_bp.home")
-            return url_for('general_bp.home')
+            logger.error(f"Invalid role '{user_role}' for login redirect")
+            raise ValueError(f"Invalid role: {user_role}")
     except Exception as e:
         logger.error(f"Error determining login redirect for role '{user_role}': {str(e)}")
-        return url_for('general_bp.home')
+        return url_for('users.logout')  # Redirect to logout for invalid roles
 
 def get_explore_tools_redirect(user_role):
     """Determine where to redirect user when they click 'Explore Your Tools' based on their role."""
@@ -196,11 +196,11 @@ def get_explore_tools_redirect(user_role):
         elif user_role == 'admin':
             return url_for('admin.dashboard')
         else:
-            logger.warning(f"Unknown role '{user_role}' for explore tools redirect, defaulting to general_bp.home")
-            return url_for('general_bp.home')
+            logger.error(f"Invalid role '{user_role}' for explore tools redirect")
+            raise ValueError(f"Invalid role: {user_role}")
     except Exception as e:
         logger.error(f"Error determining explore tools redirect for role '{user_role}': {str(e)}")
-        return url_for('general_bp.home')
+        return url_for('users.logout')  # Redirect to logout for invalid roles
 
 @users_bp.route('/login', methods=['GET', 'POST'])
 @utils.limiter.limit("50/hour")
@@ -587,6 +587,11 @@ def setup_wizard():
             if user.get('trial_end_date') and user.get('trial_end_date') < datetime.utcnow() and not user.get('subscribed', False):
                 return redirect(url_for('subscribe_bp.subscribe'))
             return redirect(get_post_login_redirect(user.get('role', 'trader')))
+
+        if user.get('role') not in ['trader', 'startup', 'admin']:
+            flash(trans('general_invalid_role', default='Invalid user role'), 'danger')
+            logger.error(f"Invalid role '{user.get('role')}' for user {user_id} in setup wizard")
+            return redirect(url_for('users.logout'))
 
         form = BusinessSetupForm()
         if form.validate_on_submit():
