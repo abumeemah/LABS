@@ -71,6 +71,7 @@ GENERAL_TRANSLATIONS = {
         'general_scan_qr': 'Scan QR',
         # General module
         'general_login_identifier': 'Login Identifier',
+        'general_business_finance_desc':'Simplified business finance, built for traders, startups, and modern entrepreneurs.',
         'general_identifier_required': 'Identifier is required',
         'general_identifier_not_found': 'Identifier not found',
         'general_signup': 'Sign Up',
@@ -2026,6 +2027,7 @@ GENERAL_TRANSLATIONS = {
         'general_over_by': 'Fiye da',
         'general_unit': 'Naúrar',
         'piece': 'Yanki',
+        'general_business_finance_desc': 'Kudaden kasuwanci cikin sauki, an gina shi don ’yan kasuwa, masu fara sana’a, da sabbin ’yan kasuwa na zamani.' ,
         'household': 'Gida',
         'You are over budget. Consider removing non-essential items': 'Kun wuce kasafin kuɗi. Yi la’akari da cire abubuwan da ba su da mahimmanci',
         'carton': 'Kwantena',
