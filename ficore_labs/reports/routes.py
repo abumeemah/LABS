@@ -112,35 +112,16 @@ def to_dict_investor_report(record):
         'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
     }
 
-def check_subscription_status():
-    if utils.is_admin():
-        return True
-    user = utils.get_user_query(str(current_user.id))
-    db = utils.get_mongo_db()
-    user_data = db.users.find_one(user)
-    if user_data.get('is_subscribed', False):
-        return True
-    if user_data.get('is_trial', False) and user_data.get('trial_start') and user_data.get('trial_end'):
-        current_time = datetime.utcnow()
-        if user_data['trial_start'] <= current_time <= user_data['trial_end']:
-            return True
-    return False
-
 @reports_bp.route('/')
 @login_required
 @utils.requires_role(['trader', 'startup'])
 def index():
     try:
-        db = utils.get_mongo_db()
-        user = utils.get_user_query(str(current_user.id))
-        user_data = db.users.find_one(user)
-        is_subscribed = user_data.get('is_subscribed', False)
-        is_trial_active = user_data.get('is_trial', False) and user_data.get('trial_start') and user_data.get('trial_end') and user_data['trial_start'] <= datetime.utcnow() <= user_data['trial_end']
+        can_interact = utils.can_user_interact(current_user)
         return render_template(
             'reports/index.html',
             title=utils.trans('reports_index', default='Reports', lang=session.get('lang', 'en')),
-            is_subscribed=is_subscribed,
-            is_trial_active=is_trial_active
+            can_interact=can_interact
         )
     except Exception as e:
         logger.error(f"Error loading reports index for user {current_user.id}: {str(e)}", exc_info=True)
@@ -152,7 +133,8 @@ def index():
 @utils.requires_role(['trader', 'startup'])
 def profit_loss():
     form = ReportForm()
-    if not check_subscription_status():
+    can_interact = utils.can_user_interact(current_user)
+    if not can_interact:
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
         return redirect(url_for('subscribe.index'))
     cashflows = []
@@ -187,7 +169,7 @@ def profit_loss():
         form=form,
         cashflows=cashflows,
         title=utils.trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en')),
-        read_only=not check_subscription_status()
+        can_interact=can_interact
     )
 
 @reports_bp.route('/debtors_creditors', methods=['GET', 'POST'])
@@ -195,7 +177,8 @@ def profit_loss():
 @utils.requires_role(['trader', 'startup'])
 def debtors_creditors():
     form = ReportForm()
-    if not check_subscription_status():
+    can_interact = utils.can_user_interact(current_user)
+    if not can_interact:
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
         return redirect(url_for('subscribe.index'))
     records = []
@@ -230,7 +213,7 @@ def debtors_creditors():
         form=form,
         records=records,
         title=utils.trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en')),
-        read_only=not check_subscription_status()
+        can_interact=can_interact
     )
 
 @reports_bp.route('/funds', methods=['GET', 'POST'])
@@ -238,7 +221,8 @@ def debtors_creditors():
 @utils.requires_role(['startup'])
 def funds():
     form = ReportForm()
-    if not check_subscription_status():
+    can_interact = utils.can_user_interact(current_user)
+    if not can_interact:
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
         return redirect(url_for('subscribe.index'))
     funds = []
@@ -273,7 +257,7 @@ def funds():
         form=form,
         funds=funds,
         title=utils.trans('reports_funds', default='Funds Report', lang=session.get('lang', 'en')),
-        read_only=not check_subscription_status()
+        can_interact=can_interact
     )
 
 @reports_bp.route('/forecasts', methods=['GET', 'POST'])
@@ -281,7 +265,8 @@ def funds():
 @utils.requires_role(['startup'])
 def forecasts():
     form = ReportForm()
-    if not check_subscription_status():
+    can_interact = utils.can_user_interact(current_user)
+    if not can_interact:
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
         return redirect(url_for('subscribe.index'))
     forecasts = []
@@ -316,7 +301,7 @@ def forecasts():
         form=form,
         forecasts=forecasts,
         title=utils.trans('reports_forecasts', default='Forecasts Report', lang=session.get('lang', 'en')),
-        read_only=not check_subscription_status()
+        can_interact=can_interact
     )
 
 @reports_bp.route('/investor_reports', methods=['GET', 'POST'])
@@ -324,7 +309,8 @@ def forecasts():
 @utils.requires_role(['startup'])
 def investor_reports():
     form = ReportForm()
-    if not check_subscription_status():
+    can_interact = utils.can_user_interact(current_user)
+    if not can_interact:
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
         return redirect(url_for('subscribe.index'))
     reports = []
@@ -359,7 +345,7 @@ def investor_reports():
         form=form,
         reports=reports,
         title=utils.trans('reports_investor_reports', default='Investor Reports', lang=session.get('lang', 'en')),
-        read_only=not check_subscription_status()
+        can_interact=can_interact
     )
 
 @reports_bp.route('/admin/customer-reports', methods=['GET', 'POST'])
@@ -367,6 +353,7 @@ def investor_reports():
 @utils.requires_role('admin')
 def customer_reports():
     form = CustomerReportForm()
+    can_interact = utils.can_user_interact(current_user)  # Should always be True for admins due to role check
     if form.validate_on_submit():
         role = form.role.data if form.role.data else None
         report_format = form.format.data
@@ -442,7 +429,7 @@ def customer_reports():
                 }
                 report_data.append(data)
             if report_format == 'html':
-                return render_template('reports/customer_reports.html', report_data=report_data, title='Customer Reports')
+                return render_template('reports/customer_reports.html', report_data=report_data, title='Customer Reports', can_interact=can_interact)
             elif report_format == 'pdf':
                 return generate_customer_report_pdf(report_data)
             elif report_format == 'csv':
@@ -450,7 +437,7 @@ def customer_reports():
         except Exception as e:
             logger.error(f"Error generating customer report: {str(e)}", exc_info=True)
             flash('An error occurred while generating the report', 'danger')
-    return render_template('reports/customer_reports_form.html', form=form, title='Generate Customer Report')
+    return render_template('reports/customer_reports_form.html', form=form, title='Generate Customer Report', can_interact=can_interact)
 
 def generate_profit_loss_pdf(cashflows):
     buffer = BytesIO()
