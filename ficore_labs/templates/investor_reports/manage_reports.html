@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script>{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}{{ t('investor_reports_manage', default='Manage Investor Reports') }} - FiCore{% endblock %}
 {% block content %}
 <div class="container mt-5">
@@ -47,7 +8,14 @@
     </div>
     <div class="mb-4">
         <a href="{{ url_for('investor_reports.index') }}" class="btn btn-secondary">{{ t('general_back', default='Back') }}</a>
-        <a href="{{ url_for('investor_reports.add') }}" class="btn btn-primary">{{ t('investor_reports_create_title', default='Add New Report') }}</a>
+        {% if can_interact %}
+            <a href="{{ url_for('investor_reports.add') }}" class="btn btn-primary">{{ t('investor_reports_create_title', default='Add New Report') }}</a>
+        {% else %}
+            <div class="alert alert-warning d-inline-block" role="alert">
+                {{ t('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to add new reports.') }}
+                <a href="{{ url_for('general_bp.subscription_required') }}" class="alert-link">{{ t('general_subscribe', default='Subscribe Now') }}</a>
+            </div>
+        {% endif %}
     </div>
     {% if reports|length > 0 %}
         <div class="mb-4">
@@ -70,21 +38,25 @@
                             <td data-label="{{ t('investor_reports_date', default='Report Date') }}">{{ format_date(report.report_date) }}</td>
                             <td data-label="{{ t('general_created_at', default='Created At') }}">{{ format_date(report.created_at) }}</td>
                             <td data-label="{{ t('general_actions', default='Actions') }}">
-                                <a href="{{ url_for('investor_reports.edit', id=report._id) }}" 
-                                   class="btn btn-primary btn-sm"
-                                   data-bs-toggle="tooltip" 
-                                   title="{{ t('general_edit', default='Edit') }}">
-                                    {{ t('general_edit', default='Edit') }}
-                                </a>
-                                <form action="{{ url_for('investor_reports.delete', id=report._id) }}" method="POST" class="d-inline">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-danger btn-sm" 
-                                            onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
-                                            data-bs-toggle="tooltip" 
-                                            title="{{ t('general_delete', default='Delete') }}">
-                                        {{ t('general_delete', default='Delete') }}
-                                    </button>
-                                </form>
+                                {% if can_interact %}
+                                    <a href="{{ url_for('investor_reports.edit', id=report._id) }}" 
+                                       class="btn btn-primary btn-sm"
+                                       data-bs-toggle="tooltip" 
+                                       title="{{ t('general_edit', default='Edit') }}">
+                                        {{ t('general_edit', default='Edit') }}
+                                    </a>
+                                    <form action="{{ url_for('investor_reports.delete', id=report._id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-danger btn-sm" 
+                                                onclick="return confirm('{{ t('general_confirm_delete', default='Are you sure?') }}')"
+                                                data-bs-toggle="tooltip" 
+                                                title="{{ t('general_delete', default='Delete') }}">
+                                            {{ t('general_delete', default='Delete') }}
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted">{{ t('general_subscription_required', default='Subscription required') }}</span>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
