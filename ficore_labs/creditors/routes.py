@@ -11,6 +11,9 @@ import re
 import urllib.parse
 import utils
 from translations import trans
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ def index():
         creditors = list(db.records.find(query).sort('created_at', -1))
         
         # Check if user can interact (for template rendering)
-        can_interact = utils.is_admin() or current_user.is_trial_active()
+        can_interact = utils.can_user_interact(current_user)
         if not can_interact:
             flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
         
@@ -74,7 +77,7 @@ def manage():
         creditors = list(db.records.find(query).sort('created_at', -1))
         
         # Check if user can interact (for template rendering)
-        can_interact = utils.is_admin() or current_user.is_trial_active()
+        can_interact = utils.can_user_interact(current_user)
         if not can_interact:
             flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
         
@@ -107,7 +110,7 @@ def view(id):
         creditor['_id'] = str(creditor['_id'])
         creditor['created_at'] = creditor['created_at'].isoformat() if creditor.get('created_at') else None
         creditor['reminder_count'] = creditor.get('reminder_count', 0)
-        creditor['can_interact'] = utils.is_admin() or current_user.is_trial_active()
+        creditor['can_interact'] = utils.can_user_interact(current_user)
         
         return jsonify(creditor)
     except Exception as e:
@@ -130,7 +133,7 @@ def view_page(id):
             return redirect(url_for('creditors.index'))
         
         # Check if user can interact (for template rendering)
-        can_interact = utils.is_admin() or current_user.is_trial_active()
+        can_interact = utils.can_user_interact(current_user)
         if not can_interact:
             flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
         
@@ -150,12 +153,8 @@ def view_page(id):
 def share(id):
     """Generate a WhatsApp link to share IOU details (requires active trial/subscription)."""
     try:
-        if not utils.is_admin():
-            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-                if not current_user.is_subscribed:
-                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to share IOUs.')}), 403
-                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your subscription has expired. Please renew to share IOUs.')}), 403
+        if not utils.can_user_interact(current_user):
+            return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to share IOUs.')}), 403
         
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to share any creditor during testing
@@ -187,12 +186,8 @@ def share(id):
 def send_reminder():
     """Send delivery reminder to creditor via SMS/WhatsApp or set snooze (requires active trial/subscription)."""
     try:
-        if not utils.is_admin():
-            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-                if not current_user.is_subscribed:
-                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to send reminders.')}), 403
-                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                    return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your subscription has expired. Please renew to send reminders.')}), 403
+        if not utils.can_user_interact(current_user):
+            return jsonify({'success': False, 'message': trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.')}), 403
         
         data = request.get_json()
         debt_id = data.get('debtId')
@@ -253,18 +248,9 @@ def send_reminder():
 def generate_iou(id):
     """Generate PDF IOU for a creditor (requires active trial/subscription)."""
     try:
-        if not utils.is_admin():
-            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-                if not current_user.is_subscribed:
-                    flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to generate IOUs.'), 'warning')
-                    return redirect(url_for('subscribe_bp.subscribe'))
-                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                    flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to generate IOUs.'), 'warning')
-                    return redirect(url_for('subscribe_bp.subscribe'))
-        
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.units import inch
+        if not utils.can_user_interact(current_user):
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.'), 'warning')
+            return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to generate IOU for any creditor during testing
@@ -322,14 +308,9 @@ def generate_iou(id):
 @utils.requires_role('trader')
 def add():
     """Add a new creditor record (requires active trial/subscription)."""
-    if not utils.is_admin():
-        if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-            if not current_user.is_subscribed:
-                flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to create creditors.'), 'warning')
-                return redirect(url_for('subscribe_bp.subscribe'))
-            elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to create creditors.'), 'warning')
-                return redirect(url_for('subscribe_bp.subscribe'))
+    if not utils.can_user_interact(current_user):
+        flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to create creditors.'), 'warning')
+        return redirect(url_for('subscribe_bp.subscribe'))
     
     form = CreditorForm()
     if form.validate_on_submit():
@@ -354,7 +335,8 @@ def add():
     
     return render_template(
         'creditors/add.html',
-        form=form
+        form=form,
+        can_interact=utils.can_user_interact(current_user)
     )
 
 @creditors_bp.route('/edit/<id>', methods=['GET', 'POST'])
@@ -373,14 +355,9 @@ def edit(id):
             return redirect(url_for('creditors.index'))
         
         if request.method == 'POST':
-            if not utils.is_admin():
-                if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-                    if not current_user.is_subscribed:
-                        flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to edit creditors.'), 'warning')
-                        return redirect(url_for('subscribe_bp.subscribe'))
-                    elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                        flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to edit creditors.'), 'warning')
-                        return redirect(url_for('subscribe_bp.subscribe'))
+            if not utils.can_user_interact(current_user):
+                flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to edit creditors.'), 'warning')
+                return redirect(url_for('subscribe_bp.subscribe'))
         
         form = CreditorForm(data={
             'name': creditor['name'],
@@ -407,8 +384,7 @@ def edit(id):
                 logger.error(f"Error updating creditor {id} for user {current_user.id}: {str(e)}")
                 flash(trans('creditors_edit_error', default='An error occurred'), 'danger')
         
-        # Check if user can interact (for template rendering)
-        can_interact = utils.is_admin() or current_user.is_trial_active()
+        can_interact = utils.can_user_interact(current_user)
         if not can_interact:
             flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your creditors.'), 'warning')
         
@@ -429,14 +405,9 @@ def edit(id):
 def delete(id):
     """Delete a creditor record (requires active trial/subscription)."""
     try:
-        if not utils.is_admin():
-            if current_user.is_trial and current_user.trial_end < datetime.utcnow():
-                if not current_user.is_subscribed:
-                    flash(trans('creditors_subscription_required', default='Your trial has expired. Please subscribe to delete creditors.'), 'warning')
-                    return redirect(url_for('subscribe_bp.subscribe'))
-                elif current_user.subscription_end and current_user.subscription_end < datetime.utcnow():
-                    flash(trans('creditors_subscription_required', default='Your subscription has expired. Please renew to delete creditors.'), 'warning')
-                    return redirect(url_for('subscribe_bp.subscribe'))
+        if not utils.can_user_interact(current_user):
+            flash(trans('creditors_subscription_required', default='Your trial or subscription has expired. Please subscribe to delete creditors.'), 'warning')
+            return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
         # TEMPORARY: Allow admin to delete any creditor during testing
