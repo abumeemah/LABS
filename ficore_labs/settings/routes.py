@@ -34,18 +34,6 @@ class ProfileForm(FlaskForm):
     profile_picture = FileField(trans('general_profile_picture', default='Profile Picture'), [
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], message=trans('general_invalid_image_format', default='Only JPG, PNG, and GIF files are allowed'))
     ], render_kw={'accept': 'image/*'})
-    first_name = StringField(trans('general_first_name', default='First Name'), [
-        Optional(),
-        Length(max=50, message=trans('general_first_name_length', default='First name too long'))
-    ], render_kw={'class': 'form-control'})
-    last_name = StringField(trans('general_last_name', default='Last Name'), [
-        Optional(),
-        Length(max=50, message=trans('general_last_name_length', default='Last name too long'))
-    ], render_kw={'class': 'form-control'})
-    personal_address = TextAreaField(trans('general_address', default='Address'), [
-        Optional(),
-        Length(max=500, message=trans('general_address_length', default='Address too long'))
-    ], render_kw={'class': 'form-control'})
     business_name = StringField(trans('general_business_name', default='Business Name'), [
         Optional(),
         Length(max=100, message=trans('general_business_name_length', default='Business name too long'))
@@ -61,22 +49,6 @@ class ProfileForm(FlaskForm):
     products_services = StringField(trans('general_products_services', default='Products/Services'), [
         Optional(),
         Length(max=200, message=trans('general_products_services_length', default='Products/Services description too long'))
-    ], render_kw={'class': 'form-control'})
-    agent_name = StringField(trans('agents_agent_name', default='Agent Name'), [
-        Optional(),
-        Length(max=100, message=trans('agents_agent_name_length', default='Agent name too long'))
-    ], render_kw={'class': 'form-control'})
-    agent_id = StringField(trans('agents_agent_id', default='Agent ID'), [
-        Optional(),
-        Length(max=50, message=trans('agents_agent_id_length', default='Agent ID too long'))
-    ], render_kw={'class': 'form-control'})
-    area = StringField(trans('agents_area', default='Area'), [
-        Optional(),
-        Length(max=100, message=trans('agents_area_length', default='Area too long'))
-    ], render_kw={'class': 'form-control'})
-    agent_role = StringField(trans('agents_role', default='Role'), [
-        Optional(),
-        Length(max=50, message=trans('agents_role_length', default='Role too long'))
     ], render_kw={'class': 'form-control'})
     submit = SubmitField(trans('general_save_changes', default='Save Changes'), render_kw={'class': 'btn btn-primary w-100'})
 
@@ -94,21 +66,22 @@ class LanguageForm(FlaskForm):
 
 def get_role_based_nav():
     """Helper function to determine role-based navigation data."""
-    if current_user.role == 'personal':
-        return utils.PERSONAL_TOOLS, utils.PERSONAL_EXPLORE_FEATURES, utils.PERSONAL_NAV
-    elif current_user.role == 'trader':
-        return utils.BUSINESS_TOOLS, utils.BUSINESS_EXPLORE_FEATURES, utils.BUSINESS_NAV
-    elif current_user.role == 'agent':
-        return utils.AGENT_TOOLS, utils.AGENT_EXPLORE_FEATURES, utils.AGENT_NAV
+    if current_user.role == 'trader':
+        return utils.TRADER_TOOLS, utils.get_explore_features(), utils.TRADER_NAV
+    elif current_user.role == 'startup':
+        return utils.STARTUP_TOOLS, utils.get_explore_features(), utils.STARTUP_NAV
     elif current_user.role == 'admin':
-        return utils.ALL_TOOLS, utils.ADMIN_EXPLORE_FEATURES, utils.ADMIN_NAV
+        return utils.ALL_TOOLS, utils.get_explore_features(), utils.ADMIN_NAV
     else:
         return [], [], []  # Fallback for unexpected roles
 
 @settings_bp.route('/')
 @login_required
 def index():
-    """Display settings overview."""
+    """Display settings overview with KYC button."""
+    db = get_mongo_db()
+    kyc_record = db.kyc_records.find_one({'user_id': str(current_user.id)})
+    session['kyc_status'] = kyc_record['status'] if kyc_record else 'not_submitted'
     try:
         return render_template(
             'settings/index.html',
@@ -123,7 +96,7 @@ def index():
 @settings_bp.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
-    """Unified profile management page."""
+    """Unified profile management page with KYC status."""
     try:
         db = get_mongo_db()
         fs = GridFS(db)  # Initialize GridFS for file storage
@@ -138,20 +111,11 @@ def profile():
             form.full_name.data = user.get('display_name', user.get('_id', ''))
             form.email.data = user.get('email', '')
             form.phone.data = user.get('phone', '')
-            if user.get('personal_details') and user.get('role') == 'personal':
-                form.first_name.data = user['personal_details'].get('first_name', '')
-                form.last_name.data = user['personal_details'].get('last_name', '')
-                form.personal_address.data = user['personal_details'].get('address', '')
-            if user.get('business_details') and user.get('role') == 'trader':
+            if user.get('business_details') and user.get('role') in ['trader', 'startup']:
                 form.business_name.data = user['business_details'].get('name', '')
                 form.business_address.data = user['business_details'].get('address', '')
                 form.industry.data = user['business_details'].get('industry', '')
                 form.products_services.data = user['business_details'].get('products_services', '')
-            if user.get('agent_details') and user.get('role') == 'agent':
-                form.agent_name.data = user['agent_details'].get('agent_name', '')
-                form.agent_id.data = user['agent_details'].get('agent_id', '')
-                form.area.data = user['agent_details'].get('area', '')
-                form.agent_role.data = user['agent_details'].get('role', '')
         if form.validate_on_submit():
             try:
                 if form.email.data != user['email'] and db.users.find_one({'email': form.email.data}):
@@ -169,29 +133,13 @@ def profile():
                     'updated_at': datetime.utcnow(),
                     'setup_complete': True
                 }
-                if user.get('role') == 'personal' and (form.first_name.data or form.last_name.data or form.personal_address.data):
-                    update_data['personal_details'] = {
-                        'first_name': form.first_name.data or '',
-                        'last_name': form.last_name.data or '',
-                        'address': form.personal_address.data or '',
-                        'phone_number': form.phone.data or ''
-                    }
-                elif user.get('role') == 'trader' and (form.business_name.data or form.business_address.data or form.industry.data or form.products_services.data):
+                if user.get('role') in ['trader', 'startup'] and (form.business_name.data or form.business_address.data or form.industry.data or form.products_services.data):
                     update_data['business_details'] = {
                         'name': form.business_name.data or '',
                         'address': form.business_address.data or '',
                         'industry': form.industry.data or '',
                         'products_services': form.products_services.data or '',
                         'phone_number': form.phone.data or ''
-                    }
-                elif user.get('role') == 'agent' and (form.agent_name.data or form.agent_id.data or form.area.data or form.agent_role.data):
-                    update_data['agent_details'] = {
-                        'agent_name': form.agent_name.data or '',
-                        'agent_id': form.agent_id.data or '',
-                        'area': form.area.data or '',
-                        'role': form.agent_role.data or '',
-                        'phone': form.phone.data or '',
-                        'email': form.email.data or ''
                     }
                 db.users.update_one(user_query, {'$set': update_data})
                 flash(trans('general_profile_updated', default='Profile updated successfully'), 'success')
@@ -206,16 +154,18 @@ def profile():
             'display_name': user.get('display_name', ''),
             'phone': user.get('phone', ''),
             'coin_balance': user.get('coin_balance', 0),
-            'role': user.get('role', 'personal'),
+            'role': user.get('role', 'trader'),
             'language': user.get('language', 'en'),
             'dark_mode': user.get('dark_mode', False),
-            'personal_details': user.get('personal_details', {}),
             'business_details': user.get('business_details', {}),
-            'agent_details': user.get('agent_details', {}),
             'settings': user.get('settings', {}),
             'security_settings': user.get('security_settings', {}),
             'profile_picture': user.get('profile_picture', None)
         }
+        # Fetch KYC status
+        kyc_record = db.kyc_records.find_one({'user_id': str(user_id)})
+        user_display['kyc_status'] = kyc_record['status'] if kyc_record else 'not_submitted'
+        session['kyc_status'] = user_display['kyc_status']
         return render_template(
             'settings/profile.html',
             form=form,
