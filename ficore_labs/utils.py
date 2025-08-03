@@ -516,7 +516,7 @@ def requires_role(role):
                     return redirect(url_for('dashboard.index'))
                 if not current_user.is_trial_active():
                     logger.info(f"User {current_user.id} trial expired, redirecting to subscription")
-                    return redirect(url_for('subscribe.subscription_required'))
+                    return redirect(url_for('subscribe_bp.subscription_required'))
                 return f(*args, **kwargs)
         return decorated_function
     return decorator
