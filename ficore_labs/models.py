@@ -32,6 +32,7 @@ def get_db():
 def initialize_app_data(app):
     """
     Initialize MongoDB collections, indexes, and perform one-off migrations for business finance modules.
+    Creates a default admin account if it doesn't exist.
     
     Args:
         app: Flask application instance
@@ -58,6 +59,34 @@ def initialize_app_data(app):
             db_instance = get_db()
             logger.info(f"MongoDB database: {db_instance.name}", extra={'session_id': 'no-session-id'})
             collections = db_instance.list_collection_names()
+            
+            # Create default admin user if it doesn't exist
+            admin_user = db_instance.users.find_one({'_id': 'admin', 'role': 'admin'})
+            if not admin_user:
+                admin_data = {
+                    '_id': 'admin',
+                    'email': 'ficorerecords@gmail.com',
+                    'password': 'Admin123!',
+                    'role': 'admin',
+                    'is_admin': True,
+                    'display_name': 'Admin',
+                    'setup_complete': True,
+                    'language': 'en',
+                    'is_trial': False,
+                    'is_subscribed': True,
+                    'subscription_plan': 'admin',
+                    'subscription_start': datetime.utcnow(),
+                    'subscription_end': None,
+                    'created_at': datetime.utcnow()
+                }
+                try:
+                    created_user = create_user(db_instance, admin_data)
+                    logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
+                except Exception as e:
+                    logger.error(f"Failed to create default admin user: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
+                    raise
+            else:
+                logger.info(f"Admin user with ID 'admin' already exists, skipping creation", extra={'session_id': 'no-session-id'})
             
             # Drop unused collections (one-off migration)
             unused_collections = [
@@ -97,7 +126,7 @@ def initialize_app_data(app):
                                 'trial_start': {'bsonType': 'date'},
                                 'trial_end': {'bsonType': 'date'},
                                 'is_subscribed': {'bsonType': 'bool'},
-                                'subscription_plan': {'bsonType': ['string', 'null'], 'enum': [None, 'monthly', 'yearly']},
+                                'subscription_plan': {'bsonType': ['string', 'null'], 'enum': [None, 'monthly', 'yearly', 'admin']},
                                 'subscription_start': {'bsonType': ['date', 'null']},
                                 'subscription_end': {'bsonType': ['date', 'null']},
                                 'language': {'enum': ['en', 'ha']},
