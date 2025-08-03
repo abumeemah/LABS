@@ -326,7 +326,7 @@ def login():
                 if user.get('trial_end') and user.get('trial_end') < datetime.utcnow() and not user.get('is_subscribed', False):
                     return redirect(url_for('subscribe_bp.subscribe'))
                 return redirect(get_post_login_redirect(user.get('role', 'trader')))
-            except.errors.PyMongoError as e:
+            except pymongo.errors.PyMongoError as e:
                 logger.error(f"MongoDB error during login for {identifier}: {str(e)}")
                 flash(trans('general_database_error', default='An error occurred while accessing the database. Please try again later.'), 'danger')
                 return render_template('users/login.html', form=form, title=trans('general_login', lang=session.get('lang', 'en'))), 500
