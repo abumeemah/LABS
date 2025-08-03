@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify, send_file
 from flask_login import login_required, current_user
 from translations import trans
-from utils import requires_role, is_valid_email, format_currency, get_mongo_db, is_admin, get_user_query, initialize_tools_with_urls
+from utils import requires_role, is_valid_email, format_currency, get_mongo_db, is_admin
 from bson import ObjectId
 from datetime import datetime
 from flask_wtf import FlaskForm
