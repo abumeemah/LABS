@@ -2161,21 +2161,8 @@ h2.card-title {
     }
 }
 
-body::after {
-    content: "";
-    display: block;
-    background: var(--footer-bg);
-    height: var(--footer-height);
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: -1;
-}
-
-
 .footer {
-    background: none; /* Remove local background */
+    background: var(--footer-bg);
     color: #ffffff;
     padding: 2rem 1rem;
     text-align: center;
