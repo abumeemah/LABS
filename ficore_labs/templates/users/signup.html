@@ -16,7 +16,7 @@
                     </div>
                 {% endif %}
             {% endwith %}
-            <p class="mb-3">{{ t('general_select_role_description', default='Choose your account type: <strong>Trader</strong> for business owners tracking inventory, debtors, and creditors; or <strong>Startup</strong> for entrepreneurs managing business details and growth.') | escape }}</p>
+            <p class="mb-3">{{ t('general_select_role_description', default='Choose your account type: Trader for business owners tracking business income; or Startup for entrepreneurs and founders managing business growth.') | escape }}</p>
             <p class="mb-3 text-muted">{{ t('general_form_reset_note', default='Form fields retain your input for convenience. Clear them if needed.') | escape }}</p>
             <form class="validate-form needs-validation" method="POST" action="{{ url_for('users.signup') }}" novalidate aria-labelledby="signup-form-title">
                 {{ form.hidden_tag() }}
