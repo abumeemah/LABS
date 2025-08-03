@@ -45,15 +45,20 @@ debtors_bp = Blueprint('debtors', __name__, url_prefix='/debtors')
 @login_required
 @utils.requires_role('trader')
 def index():
-    """List all debtor records for the current user."""
+    """List all debtor records for the current user (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         query = {'type': 'debtor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'debtor'}
         debtors = list(db.records.find(query).sort('created_at', -1))
         
+        can_interact = utils.can_user_interact(current_user)
+        if not can_interact:
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your debtors.'), 'warning')
+        
         return render_template(
             'debtors/index.html',
             debtors=debtors,
+            can_interact=can_interact,
             title=trans('debtors_index', default='Debtors', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -65,15 +70,21 @@ def index():
 @login_required
 @utils.requires_role('trader')
 def manage():
-    """List all debtor records for management (edit/delete) by the current user."""
+    """List all debtor records for management (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         query = {'type': 'debtor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'debtor'}
         debtors = list(db.records.find(query).sort('created_at', -1))
         
+        can_interact = utils.can_user_interact(current_user)
+        if not can_interact:
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your debtors.'), 'warning')
+        
         return render_template(
             'debtors/manage_debtors.html',
             debtors=debtors,
+            format_currency=utils.format_currency,
+            can_interact=can_interact,
             title=trans('debtors_manage', default='Manage Debtors', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -85,7 +96,7 @@ def manage():
 @login_required
 @utils.requires_role('trader')
 def view(id):
-    """View detailed information about a specific debtor (JSON API)."""
+    """View detailed information about a specific debtor (JSON API, view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
@@ -96,6 +107,7 @@ def view(id):
         debtor['_id'] = str(debtor['_id'])
         debtor['created_at'] = debtor['created_at'].isoformat() if debtor.get('created_at') else None
         debtor['reminder_count'] = debtor.get('reminder_count', 0)
+        debtor['can_interact'] = utils.can_user_interact(current_user)
         
         return jsonify(debtor)
     except Exception as e:
@@ -106,7 +118,7 @@ def view(id):
 @login_required
 @utils.requires_role('trader')
 def view_page(id):
-    """Render a detailed view page for a specific debtor."""
+    """Render a detailed view page for a specific debtor (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
@@ -115,9 +127,14 @@ def view_page(id):
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
         
+        can_interact = utils.can_user_interact(current_user)
+        if not can_interact:
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your debtors.'), 'warning')
+        
         return render_template(
             'debtors/view.html',
             debtor=debtor,
+            can_interact=can_interact,
             title=trans('debtors_debt_details', default='Debt Details', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -129,8 +146,11 @@ def view_page(id):
 @login_required
 @utils.requires_role('trader')
 def share(id):
-    """Generate a WhatsApp link to share IOU details."""
+    """Generate a WhatsApp link to share IOU details (requires active trial/subscription)."""
     try:
+        if not utils.can_user_interact(current_user):
+            return jsonify({'success': False, 'message': trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to share IOUs.')}), 403
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
@@ -138,8 +158,6 @@ def share(id):
             return jsonify({'success': False, 'message': trans('debtors_record_not_found', default='Record not found')}), 404
         if not debtor.get('contact'):
             return jsonify({'success': False, 'message': trans('debtors_no_contact', default='No contact provided for sharing')}), 400
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            return jsonify({'success': False, 'message': trans('debtors_insufficient_credits', default='Insufficient Ficore Credits to share IOU')}), 400
         
         contact = re.sub(r'\D', '', debtor['contact'])
         if contact.startswith('0'):
@@ -150,17 +168,6 @@ def share(id):
         message = f"Hi {debtor['name']}, this is an IOU for {utils.format_currency(debtor['amount_owed'])} recorded on FiCore Records on {utils.format_date(debtor['created_at'])}. Details: {debtor.get('description', 'No description provided')}."
         whatsapp_link = f"https://wa.me/{contact}?text={urllib.parse.quote(message)}"
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"IOU shared for {debtor['name']}"
-            })
-        
         return jsonify({'success': True, 'whatsapp_link': whatsapp_link})
     except Exception as e:
         logger.error(f"Error sharing IOU for debtor {id}: {str(e)}")
@@ -170,8 +177,11 @@ def share(id):
 @login_required
 @utils.requires_role('trader')
 def send_reminder():
-    """Send reminder to debtor via SMS/WhatsApp or set snooze."""
+    """Send reminder to debtor via SMS/WhatsApp or set snooze (requires active trial/subscription)."""
     try:
+        if not utils.can_user_interact(current_user):
+            return jsonify({'success': False, 'message': trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to send reminders.')}), 403
+        
         data = request.get_json()
         debt_id = data.get('debtId')
         recipient = data.get('recipient')
@@ -189,10 +199,6 @@ def send_reminder():
         if not debtor:
             return jsonify({'success': False, 'message': trans('debtors_record_not_found', default='Record not found')}), 404
         
-        credit_cost = 2 if recipient else 1
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(credit_cost):
-            return jsonify({'success': False, 'message': trans('debtors_insufficient_credits', default='Insufficient Ficore Credits to send reminder')}), 400
-        
         update_data = {'$inc': {'reminder_count': 1}}
         if snooze_days:
             update_data['$set'] = {'reminder_date': datetime.utcnow() + timedelta(days=snooze_days)}
@@ -208,17 +214,6 @@ def send_reminder():
         
         if success:
             db.records.update_one({'_id': ObjectId(debt_id)}, update_data)
-            
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -credit_cost}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -credit_cost,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"{'Reminder sent' if recipient else 'Snooze set'} for {debtor['name']}"
-                })
             
             db.reminder_logs.insert_one({
                 'user_id': str(current_user.id),
@@ -242,8 +237,12 @@ def send_reminder():
 @login_required
 @utils.requires_role('trader')
 def generate_iou(id):
-    """Generate PDF IOU for a debtor."""
+    """Generate PDF IOU for a debtor (requires active trial/subscription)."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.'), 'warning')
+            return redirect(url_for('subscribe_bp.subscribe'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
@@ -251,10 +250,6 @@ def generate_iou(id):
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('debtors_insufficient_credits', default='Insufficient Ficore Credits to generate IOU'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -288,17 +283,6 @@ def generate_iou(id):
         p.showPage()
         p.save()
         
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"IOU generated for {debtor['name']}"
-            })
-        
         buffer.seek(0)
         return Response(
             buffer.getvalue(),
@@ -317,8 +301,12 @@ def generate_iou(id):
 @login_required
 @utils.requires_role('trader')
 def generate_iou_csv(id):
-    """Generate CSV IOU for a debtor."""
+    """Generate CSV IOU for a debtor (requires active trial/subscription)."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to generate IOUs.'), 'warning')
+            return redirect(url_for('subscribe_bp.subscribe'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
@@ -326,10 +314,6 @@ def generate_iou_csv(id):
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
-        
-        if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-            flash(trans('debtors_insufficient_credits', default='Insufficient Ficore Credits to generate IOU'), 'danger')
-            return redirect(url_for('agents_bp.manage_credits'))
         
         output = []
         output.extend(ficore_csv_header(current_user))
@@ -343,17 +327,6 @@ def generate_iou_csv(id):
         output.append([trans('debtors_reminders_sent', default='Reminders Sent'), debtor.get('reminder_count', 0)])
         output.append([''])
         output.append([trans('debtors_iou_footer', default='This document serves as an IOU recorded on FiCore Records.')])
-        
-        if not utils.is_admin():
-            user_query = utils.get_user_query(str(current_user.id))
-            db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-            db.ficore_credit_transactions.insert_one({
-                'user_id': str(current_user.id),
-                'amount': -1,
-                'type': 'spend',
-                'date': datetime.utcnow(),
-                'ref': f"IOU CSV generated for {debtor['name']}"
-            })
         
         buffer = io.BytesIO()
         writer = csv.writer(buffer, lineterminator='\n')
@@ -377,12 +350,12 @@ def generate_iou_csv(id):
 @login_required
 @utils.requires_role('trader')
 def add():
-    """Add a new debtor record."""
-    form = DebtorForm()
-    if not utils.is_admin() and not utils.check_ficore_credit_balance(1):
-        flash(trans('debtors_insufficient_credits', default='Insufficient Ficore Credits to add debtor'), 'danger')
-        return redirect(url_for('agents_bp.manage_credits'))
+    """Add a new debtor record (requires active trial/subscription)."""
+    if not utils.can_user_interact(current_user):
+        flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to create debtors.'), 'warning')
+        return redirect(url_for('subscribe_bp.subscribe'))
 
+    form = DebtorForm()
     if form.validate_on_submit():
         try:
             db = utils.get_mongo_db()
@@ -398,17 +371,6 @@ def add():
             }
             db.records.insert_one(debtor_data)
             
-            if not utils.is_admin():
-                user_query = utils.get_user_query(str(current_user.id))
-                db.users.update_one(user_query, {'$inc': {'ficore_credit_balance': -1}})
-                db.ficore_credit_transactions.insert_one({
-                    'user_id': str(current_user.id),
-                    'amount': -1,
-                    'type': 'spend',
-                    'date': datetime.utcnow(),
-                    'ref': f"Debtor added: {form.name.data}"
-                })
-            
             flash(trans('debtors_add_success', default='Debtor added successfully'), 'success')
             return redirect(url_for('debtors.index'))
         except Exception as e:
@@ -418,6 +380,7 @@ def add():
     return render_template(
         'debtors/add.html',
         form=form,
+        can_interact=utils.can_user_interact(current_user),
         title=trans('debtors_add_debtor', default='Add Debtor', lang=session.get('lang', 'en'))
     )
 
@@ -425,7 +388,7 @@ def add():
 @login_required
 @utils.requires_role('trader')
 def edit(id):
-    """Edit an existing debtor record."""
+    """Edit an existing debtor record (requires active trial/subscription for POST)."""
     try:
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
@@ -441,6 +404,11 @@ def edit(id):
             'amount_owed': debtor['amount_owed'],
             'description': debtor.get('description', '')
         })
+
+        if request.method == 'POST':
+            if not utils.can_user_interact(current_user):
+                flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to edit debtors.'), 'warning')
+                return redirect(url_for('subscribe_bp.subscribe'))
 
         if form.validate_on_submit():
             try:
@@ -461,10 +429,15 @@ def edit(id):
                 logger.error(f"Error updating debtor {id} for user {current_user.id}: {str(e)}")
                 flash(trans('debtors_edit_error', default='An error occurred'), 'danger')
 
+        can_interact = utils.can_user_interact(current_user)
+        if not can_interact:
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Subscribe to manage your debtors.'), 'warning')
+        
         return render_template(
             'debtors/edit.html',
             form=form,
             debtor=debtor,
+            can_interact=can_interact,
             title=trans('debtors_edit_debtor', default='Edit Debtor', lang=session.get('lang', 'en'))
         )
     except Exception as e:
@@ -476,10 +449,18 @@ def edit(id):
 @login_required
 @utils.requires_role('trader')
 def delete(id):
-    """Delete a debtor record."""
+    """Delete a debtor record (requires active trial/subscription)."""
     try:
+        if not utils.can_user_interact(current_user):
+            flash(trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to delete debtors.'), 'warning')
+            return redirect(url_for('subscribe_bp.subscribe'))
+        
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        debtor = db.records.find_one(query)
+        if not debtor:
+            flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
+            return redirect(url_for('debtors.index'))
         result = db.records.delete_one(query)
         if result.deleted_count:
             flash(trans('debtors_delete_success', default='Debtor deleted successfully'), 'success')
