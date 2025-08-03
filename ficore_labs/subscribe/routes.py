@@ -4,7 +4,7 @@ from translations import trans
 from models import update_user, get_mongo_db
 import requests
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 subscribe_bp = Blueprint('subscribe_bp', __name__, url_prefix='/subscribe')
@@ -172,3 +172,22 @@ def callback():
         flash(trans('general_error', default='An error occurred during payment processing'), 'danger')
         session.pop('pending_transaction', None)
         return redirect(url_for('subscribe_bp.subscribe'))
+
+@subscribe_bp.route('/subscription-required')
+@login_required
+def subscription_required():
+    """Render a page indicating that a subscription is required."""
+    try:
+        lang = request.args.get('lang', 'en')
+        logger.info(f"Rendering subscription required page for user: {current_user.id}", 
+                    extra={'session_id': request.sid or 'no-session-id'})
+        return render_template(
+            'subscribe/subscription_required.html',
+            title=trans('subscribe_required_title', lang=lang, default='Subscription Required'),
+            can_interact=False
+        )
+    except Exception as e:
+        logger.error(f"Error rendering subscription required page for user {current_user.id}: {str(e)}", 
+                     exc_info=True, extra={'session_id': request.sid or 'no-session-id'})
+        flash(trans('general_error', default='An error occurred while loading the page'), 'danger')
+        return redirect(url_for('general_bp.home'))
