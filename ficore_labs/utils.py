@@ -186,6 +186,14 @@ _TRADER_NAV = [
         "description_key": "business_reports_desc",
         "tooltip_key": "business_reports_tooltip",
         "icon": "bi-journal-minus"
+    },
+    {
+        "endpoint": "settings.profile",
+        "label": "Profile",
+        "label_key": "profile_settings",
+        "description_key": "profile_settings_desc",
+        "tooltip_key": "profile_tooltip",
+        "icon": "bi-person"
     }
 ]
 
@@ -214,14 +222,14 @@ _STARTUP_NAV = [
         "description_key": "investor_reports_dashboard_desc",
         "tooltip_key": "investor_reports_tooltip",
         "icon": "bi-file-earmark-bar-graph"
-    },
+    },   
     {
-        "endpoint": "reports.index",
-        "label": "Reports",
-        "label_key": "business_reports",
-        "description_key": "business_reports_desc",
-        "tooltip_key": "business_reports_tooltip",
-        "icon": "bi-journal-minus"
+        "endpoint": "settings.profile",
+        "label": "Profile",
+        "label_key": "profile_settings",
+        "description_key": "profile_settings_desc",
+        "tooltip_key": "profile_tooltip",
+        "icon": "bi-person"
     }
 ]
 
