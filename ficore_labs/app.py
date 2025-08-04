@@ -2,7 +2,8 @@ import os
 import sys
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone  # Added timezone import
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo  # Added ZoneInfo import
 from flask import (
     Flask, jsonify, request, render_template, redirect, url_for, flash,
     make_response, has_request_context, session, Response, current_app, abort
@@ -179,8 +180,8 @@ class User(UserMixin):
         self.display_name = display_name or id
         self.role = role
         self.is_trial = is_trial
-        self.trial_start = trial_start or datetime.now(timezone.utc)  # Updated to timezone-aware
-        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))  # Updated to timezone-aware
+        self.trial_start = trial_start or datetime.now(timezone.utc)
+        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))
         self.is_subscribed = is_subscribed
 
     def get(self, key, default=None):
@@ -209,7 +210,12 @@ class User(UserMixin):
         if self.is_subscribed:
             return True
         if self.is_trial and self.trial_end:
-            return datetime.now(timezone.utc) <= self.trial_end  # Updated to timezone-aware
+            trial_end_aware = (
+                self.trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                if self.trial_end.tzinfo is None
+                else self.trial_end
+            )
+            return datetime.now(timezone.utc) <= trial_end_aware
         return False
 
     @property
@@ -278,14 +284,21 @@ def create_app():
                 user = app.extensions['mongo']['bizdb'].users.find_one({'_id': user_id})
                 if not user:
                     return None
+                trial_start = user.get('trial_start')
+                trial_end = user.get('trial_end')
+                # Convert naive datetimes to timezone-aware if necessary
+                if trial_start and trial_start.tzinfo is None:
+                    trial_start = trial_start.replace(tzinfo=ZoneInfo("UTC"))
+                if trial_end and trial_end.tzinfo is None:
+                    trial_end = trial_end.replace(tzinfo=ZoneInfo("UTC"))
                 return User(
                     id=user['_id'],
                     email=user['email'],
                     display_name=user.get('display_name', user['_id']),
                     role=user.get('role', 'trader'),
                     is_trial=user.get('is_trial', True),
-                    trial_start=user.get('trial_start'),
-                    trial_end=user.get('trial_end'),
+                    trial_start=trial_start,
+                    trial_end=trial_end,
                     is_subscribed=user.get('is_subscribed', False)
                 )
         except Exception as e:
@@ -381,7 +394,9 @@ def create_app():
             locale = session.get('lang', 'en')
             format_str = '%B %d, %Y, %I:%M %p' if locale == 'en' else '%d %B %Y, %I:%M %p'
             if isinstance(value, datetime):
-                return value.strftime(format_str)
+                # Ensure datetime is timezone-aware
+                value_aware = value.replace(tzinfo=ZoneInfo("UTC")) if value.tzinfo is None else value
+                return value_aware.strftime(format_str)
             return str(value)
         except Exception as e:
             logger.warning(f'Error formatting datetime {value}: {str(e)}')
@@ -390,7 +405,7 @@ def create_app():
     @app.context_processor
     def inject_globals():
         return {
-            'current_year': datetime.now().year,
+            'current_year': datetime.now(timezone.utc).year,  # Updated to timezone-aware
             'current_lang': session.get('lang', 'en'),
             'current_user': current_user if has_request_context() else None,
             'available_languages': [
@@ -489,10 +504,12 @@ def create_app():
             if isinstance(last_activity, str):
                 try:
                     last_activity = datetime.fromisoformat(last_activity.replace(' ', 'T'))
+                    if last_activity.tzinfo is None:
+                        last_activity = last_activity.replace(tzinfo=ZoneInfo("UTC"))
                 except ValueError:
-                    last_activity = datetime.now(timezone.utc)  # Updated to timezone-aware
+                    last_activity = datetime.now(timezone.utc)
                     session['last_activity'] = last_activity.isoformat()
-            if (datetime.now(timezone.utc) - last_activity).total_seconds() > 1800:  # Updated to timezone-aware
+            if (datetime.now(timezone.utc) - last_activity).total_seconds() > 1800:
                 user_id = current_user.id
                 sid = session.get('sid', 'no-session-id')
                 logger.info(f"Session timeout for user {user_id}")
@@ -518,7 +535,7 @@ def create_app():
                 )
                 return response
         if current_user.is_authenticated:
-            session['last_activity'] = datetime.now(timezone.utc).isoformat()  # Updated to timezone-aware
+            session['last_activity'] = datetime.now(timezone.utc).isoformat()
             session.modified = True
             
     return app
