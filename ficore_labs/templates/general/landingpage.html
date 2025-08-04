@@ -86,30 +86,38 @@
         <div class="row row-cols-1 row-cols-md-4 g-4">
             <div class="col">
                 <div class="why-item text-center">
-                    <i class="bi bi-check-circle-fill text-success fs-3 mb-2"></i>
-                    <p class="text-muted">{{ t('general_localized', default='Built for Nigeria with Naira support and regional insights') | e }}</p>
+                    <p class="text-muted">
+                        <span class="text-success fw-bold me-1">✓</span>
+                        {{ t('general_localized', default='Built for Nigeria with Naira support and regional insights') | e }}
+                    </p>
                 </div>
             </div>
             <div class="col">
                 <div class="why-item text-center">
-                    <i class="bi bi-check-circle-fill text-success fs-3 mb-2"></i>
-                    <p class="text-muted">{{ t('general_empowers', default='Empowers businesses and startups') | e }}</p>
+                    <p class="text-muted">
+                        <span class="text-success fw-bold me-1">✓</span>
+                        {{ t('general_empowers', default='Empowers businesses and startups') | e }}
+                    </p>
                 </div>
             </div>
             <div class="col">
                 <div class="why-item text-center">
-                    <i class="bi bi-check-circle-fill text-success fs-3 mb-2"></i>
-                    <p class="text-muted">{{ t('general_actionable', default='Actionable insights for smarter decisions') | e }}</p>
+                    <p class="text-muted">
+                        <span class="text-success fw-bold me-1">✓</span>
+                        {{ t('general_actionable', default='Actionable insights for smarter decisions') | e }}
+                    </p>
                 </div>
             </div>
             <div class="col">
                 <div class="why-item text-center">
-                    <i class="bi bi-check-circle-fill text-success fs-3 mb-2"></i>
-                    <p class="text-muted">{{ t('general_secure', default='Advisory-only – we don’t access your funds') | e }}</p>
+                    <p class="text-muted">
+                        <span class="text-success fw-bold me-1">✓</span>
+                        {{ t('general_secure', default='Advisory-only – we don’t access your funds') | e }}
+                    </p>
                 </div>
             </div>
             <div class="text-center mt-4">
-                <span class="animated-counter display-5 fw-bold text-primary" data-count="10000">10,000</span>
+                <span class="animated-counter display-5 fw-bold text-primary" data-count="150+">150+</span>
                 <span class="fs-5">{{ t('general_users_served', default='Users Served') | e }}</span>
             </div>
         </div>
@@ -322,20 +330,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Animated counter
     const counter = document.querySelector('.animated-counter');
     if (counter) {
-        const target = parseInt(counter.getAttribute('data-count')) || 0;
-        let current = 0;
-        const increment = Math.ceil(target / 100);
-        const updateCounter = () => {
-            current += increment;
-            if (current >= target) {
-                current = target;
-                counter.textContent = current.toLocaleString();
-                clearInterval(counterInterval);
-            } else {
-                counter.textContent = current.toLocaleString();
-            }
-        };
-        const counterInterval = setInterval(updateCounter, 50);
+        const target = counter.getAttribute('data-count');
+        if (target) {
+            counter.textContent = target;
+        } else {
+            counter.textContent = '0';
+        }
     }
 
     // Navbar touch handling
