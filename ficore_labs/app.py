@@ -428,6 +428,7 @@ def create_app():
                 ADMIN_NAV if current_user.is_authenticated and current_user.role == 'admin'
                 else STARTUP_NAV if current_user.is_authenticated and current_user.role == 'startup'
                 else TRADER_NAV if current_user.is_authenticated and current_user.role == 'trader'
+                else []
             ),
             'tools': (
                 ADMIN_TOOLS if current_user.is_authenticated and current_user.role == 'admin'
