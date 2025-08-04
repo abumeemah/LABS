@@ -66,7 +66,7 @@ def index():
 
 @funds_bp.route('/manage')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def manage():
     """List all fund records for management (edit/delete) by the current user."""
     try:
@@ -94,7 +94,7 @@ def manage():
 
 @funds_bp.route('/view/<id>')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view(id):
     """View detailed information about a specific fund (JSON API)."""
     try:
@@ -121,7 +121,7 @@ def view(id):
 
 @funds_bp.route('/view_page/<id>')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view_page(id):
     """Render a detailed view page for a specific fund."""
     try:
@@ -155,7 +155,7 @@ def view_page(id):
 
 @funds_bp.route('/generate_report/<id>')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def generate_report(id):
     """Generate PDF report for a fund."""
     try:
@@ -229,7 +229,7 @@ def generate_report(id):
 
 @funds_bp.route('/generate_report_csv/<id>')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def generate_report_csv(id):
     """Generate CSV report for a fund."""
     try:
@@ -290,7 +290,7 @@ def generate_report_csv(id):
 
 @funds_bp.route('/add', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def add():
     """Add a new fund record."""
     if not utils.can_user_interact(current_user):
@@ -327,7 +327,7 @@ def add():
 
 @funds_bp.route('/edit/<id>', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def edit(id):
     """Edit an existing fund record."""
     try:
@@ -391,7 +391,7 @@ def edit(id):
 
 @funds_bp.route('/delete/<id>', methods=['POST'])
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def delete(id):
     """Delete a fund record."""
     try:
