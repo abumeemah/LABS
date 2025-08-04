@@ -82,6 +82,53 @@
                         </div>
                     </div>
                 </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="text-primary mb-2">
+                                <i class="bi bi-cash-stack fa-2x"></i>
+                            </div>
+                            <h6 class="card-title">{{ trans('receipts_money_in', default='Income') | escape }}</h6>
+                            <p class="card-text">
+                                <span class="h5 text-primary">{{ stats.total_receipts }}</span><br>
+                                <small class="text-muted">{{ stats.total_receipts_amount | format_currency }}</small>
+                            </p>
+                            <a href="{{ url_for('receipts.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="text-primary mb-2">
+                                <i class="bi bi-wallet2 fa-2x"></i>
+                            </div>
+                            <h6 class="card-title">{{ trans('payments_money_out', default='Expenses') | escape }}</h6>
+                            <p class="card-text">
+                                <span class="h5 text-primary">{{ stats.total_payments }}</span><br>
+                                <small class="text-muted">{{ stats.total_payments_amount | format_currency }}</small>
+                            </p>
+                            <a href="{{ url_for('payments.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                        </div>
+                    </div>
+                </div>
+                {% if current_user.role in ['startup', 'admin'] %}
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="text-primary mb-2">
+                                <i class="bi bi-graph-up fa-2x"></i>
+                            </div>
+                            <h6 class="card-title">{{ trans('forecasts_dashboard', default='Forecasts') | escape }}</h6>
+                            <p class="card-text">
+                                <span class="h5 text-primary">{{ stats.total_forecasts }}</span><br>
+                                <small class="text-muted">{{ stats.total_forecasts_amount | format_currency }}</small>
+                            </p>
+                            <a href="{{ url_for('forecasts.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -90,14 +137,17 @@
         <div class="mb-4">
             <h3>{{ trans('general_quick_actions', default='Quick Actions') | escape }}</h3>
             <div class="d-flex flex-wrap gap-2">
+                <!-- Trader-specific actions -->
                 <a href="{{ url_for('creditors.add') }}" class="btn btn-primary">{{ trans('creditors_create_what_you_owe', default='Create What You Owe') | escape }}</a>
                 <a href="{{ url_for('debtors.add') }}" class="btn btn-primary">{{ trans('debtors_create_what_they_owe_you', default='Create What They Owe You') | escape }}</a>
                 <a href="{{ url_for('payments.add') }}" class="btn btn-primary">{{ trans('payments_add_money_out', default='Add Money Out') | escape }}</a>
                 <a href="{{ url_for('receipts.add') }}" class="btn btn-primary">{{ trans('receipts_add_money_in', default='Add Money In') | escape }}</a>
                 <a href="{{ url_for('funds.add') }}" class="btn btn-primary">{{ trans('funds_add', default='Add Fund') | escape }}</a>
+                <!-- Admin-specific action -->
                 {% if current_user.role == 'admin' %}
                     <a href="{{ url_for('admin.dashboard') }}" class="btn btn-warning">{{ trans('admin_dashboard', default='Admin Dashboard') | escape }}</a>
                 {% endif %}
+                <!-- Startup-specific actions -->
                 {% if current_user.role in ['startup', 'admin'] %}
                     <a href="{{ url_for('reports.customer_reports') }}" class="btn btn-primary">{{ trans('reports_customer', default='Customer Reports') | escape }}</a>
                     <a href="{{ url_for('reports.investor_reports') }}" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ trans('investor_reports_tooltip', default='View investor reports') | escape }}">
