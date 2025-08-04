@@ -4,11 +4,10 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, FloatField, TextAreaField, SubmitField
 from wtforms.validators import DataRequired, Optional
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import logging
 import io
-import os
-import requests
 import re
 import urllib.parse
 import utils
@@ -24,12 +23,12 @@ logger = logging.getLogger(__name__)
 # Placeholder functions for SMS/WhatsApp reminders (implement in utils.py or with external API)
 def send_sms_reminder(recipient, message):
     """Placeholder for sending SMS reminder."""
-    logger.info(f"Simulating SMS to {recipient}: {message}")
+    logger.info(f"Simulating SMS to {recipient}: {message}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'none'})
     return True, {'status': 'SMS sent successfully'}  # Replace with actual API call
 
 def send_whatsapp_reminder(recipient, message):
     """Placeholder for sending WhatsApp reminder."""
-    logger.info(f"Simulating WhatsApp to {recipient}: {message}")
+    logger.info(f"Simulating WhatsApp to {recipient}: {message}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'none'})
     return True, {'status': 'WhatsApp sent successfully'}  # Replace with actual API call
 
 class DebtorForm(FlaskForm):
@@ -43,13 +42,20 @@ debtors_bp = Blueprint('debtors', __name__, url_prefix='/debtors')
 
 @debtors_bp.route('/')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def index():
     """List all debtor records for the current user (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
-        query = {'type': 'debtor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'user_id': str(current_user.id), 'type': 'debtor'}
         debtors = list(db.records.find(query).sort('created_at', -1))
+        
+        # Convert naive datetimes to timezone-aware
+        for debtor in debtors:
+            if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+                debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+                debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
         
         can_interact = utils.can_user_interact(current_user)
         if not can_interact:
@@ -62,19 +68,26 @@ def index():
             title=trans('debtors_index', default='Debtors', lang=session.get('lang', 'en'))
         )
     except Exception as e:
-        logger.error(f"Error fetching debtors for user {current_user.id}: {str(e)}")
+        logger.error(f"Error fetching debtors for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_fetch_error', default='An error occurred'), 'danger')
         return redirect(url_for('dashboard.index'))
 
 @debtors_bp.route('/manage')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def manage():
     """List all debtor records for management (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
-        query = {'type': 'debtor'} if utils.is_admin() else {'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'user_id': str(current_user.id), 'type': 'debtor'}
         debtors = list(db.records.find(query).sort('created_at', -1))
+        
+        # Convert naive datetimes to timezone-aware
+        for debtor in debtors:
+            if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+                debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+                debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
         
         can_interact = utils.can_user_interact(current_user)
         if not can_interact:
@@ -88,44 +101,60 @@ def manage():
             title=trans('debtors_manage', default='Manage Debtors', lang=session.get('lang', 'en'))
         )
     except Exception as e:
-        logger.error(f"Error fetching debtors for manage page for user {current_user.id}: {str(e)}")
+        logger.error(f"Error fetching debtors for manage page for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_fetch_error', default='An error occurred'), 'danger')
         return redirect(url_for('debtors.index'))
 
 @debtors_bp.route('/view/<id>')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def view(id):
     """View detailed information about a specific debtor (JSON API, view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         if not debtor:
             return jsonify({'error': trans('debtors_record_not_found', default='Record not found')}), 404
         
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+            debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
+        
         debtor['_id'] = str(debtor['_id'])
         debtor['created_at'] = debtor['created_at'].isoformat() if debtor.get('created_at') else None
+        debtor['reminder_date'] = debtor['reminder_date'].isoformat() if debtor.get('reminder_date') else None
         debtor['reminder_count'] = debtor.get('reminder_count', 0)
         debtor['can_interact'] = utils.can_user_interact(current_user)
         
         return jsonify(debtor)
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        return jsonify({'error': trans('debtors_invalid_id', default='Invalid debtor ID')}), 404
     except Exception as e:
-        logger.error(f"Error fetching debtor {id} for user {current_user.id}: {str(e)}")
+        logger.error(f"Error fetching debtor {id} for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         return jsonify({'error': trans('debtors_fetch_error', default='An error occurred')}), 500
 
 @debtors_bp.route('/view_page/<id>')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def view_page(id):
     """Render a detailed view page for a specific debtor (view-only post-trial)."""
     try:
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
+        
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+            debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
         
         can_interact = utils.can_user_interact(current_user)
         if not can_interact:
@@ -137,14 +166,18 @@ def view_page(id):
             can_interact=can_interact,
             title=trans('debtors_debt_details', default='Debt Details', lang=session.get('lang', 'en'))
         )
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('debtors_invalid_id', default='Invalid debtor ID'), 'danger')
+        return redirect(url_for('debtors.index'))
     except Exception as e:
-        logger.error(f"Error rendering debtor view page {id} for user {current_user.id}: {str(e)}")
+        logger.error(f"Error rendering debtor view page {id} for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_view_error', default='An error occurred'), 'danger')
         return redirect(url_for('debtors.index'))
 
 @debtors_bp.route('/share/<id>')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def share(id):
     """Generate a WhatsApp link to share IOU details (requires active trial/subscription)."""
     try:
@@ -152,30 +185,39 @@ def share(id):
             return jsonify({'success': False, 'message': trans('debtors_subscription_required', default='Your trial or subscription has expired. Please subscribe to share IOUs.')}), 403
         
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         if not debtor:
             return jsonify({'success': False, 'message': trans('debtors_record_not_found', default='Record not found')}), 404
         if not debtor.get('contact'):
             return jsonify({'success': False, 'message': trans('debtors_no_contact', default='No contact provided for sharing')}), 400
         
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        
         contact = re.sub(r'\D', '', debtor['contact'])
         if contact.startswith('0'):
             contact = '234' + contact[1:]
         elif not contact.startswith('+'):
             contact = '234' + contact
+        if not re.match(r'^\+?\d{10,15}$', contact):
+            return jsonify({'success': False, 'message': trans('debtors_invalid_contact', default='Invalid contact number format')}), 400
         
-        message = f"Hi {debtor['name']}, this is an IOU for {utils.format_currency(debtor['amount_owed'])} recorded on FiCore Records on {utils.format_date(debtor['created_at'])}. Details: {debtor.get('description', 'No description provided')}."
+        message = f"Hi {utils.sanitize_input(debtor['name'], max_length=100)}, this is an IOU for {utils.format_currency(debtor['amount_owed'])} recorded on FiCore Records on {utils.format_date(debtor['created_at'])}. Details: {utils.sanitize_input(debtor.get('description', 'No description provided'), max_length=500)}."
         whatsapp_link = f"https://wa.me/{contact}?text={urllib.parse.quote(message)}"
         
         return jsonify({'success': True, 'whatsapp_link': whatsapp_link})
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        return jsonify({'error': trans('debtors_invalid_id', default='Invalid debtor ID')}), 404
     except Exception as e:
-        logger.error(f"Error sharing IOU for debtor {id}: {str(e)}")
+        logger.error(f"Error sharing IOU for debtor {id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         return jsonify({'success': False, 'message': trans('debtors_share_error', default='An error occurred')}), 500
 
 @debtors_bp.route('/send_reminder', methods=['POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def send_reminder():
     """Send reminder to debtor via SMS/WhatsApp or set snooze (requires active trial/subscription)."""
     try:
@@ -192,8 +234,16 @@ def send_reminder():
         if not debt_id or (not recipient and not snooze_days):
             return jsonify({'success': False, 'message': trans('debtors_missing_fields', default='Missing required fields')}), 400
         
+        if snooze_days:
+            try:
+                snooze_days = int(snooze_days)
+                if snooze_days < 1 or snooze_days > 30:
+                    raise ValueError("Snooze days must be between 1 and 30")
+            except ValueError:
+                return jsonify({'success': False, 'message': trans('debtors_invalid_snooze', default='Invalid snooze duration')}), 400
+        
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(debt_id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(debt_id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(debt_id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         
         if not debtor:
@@ -201,7 +251,7 @@ def send_reminder():
         
         update_data = {'$inc': {'reminder_count': 1}}
         if snooze_days:
-            update_data['$set'] = {'reminder_date': datetime.utcnow() + timedelta(days=snooze_days)}
+            update_data['$set'] = {'reminder_date': datetime.now(timezone.utc) + timedelta(days=snooze_days)}
         
         success = True
         api_response = {}
@@ -221,7 +271,7 @@ def send_reminder():
                 'recipient': recipient or 'N/A',
                 'message': message or 'Snooze',
                 'type': send_type if recipient else 'snooze',
-                'sent_at': datetime.utcnow(),
+                'sent_at': datetime.now(timezone.utc),
                 'api_response': api_response if recipient else {'status': f'Snoozed for {snooze_days} days'}
             })
             
@@ -229,13 +279,16 @@ def send_reminder():
         else:
             return jsonify({'success': False, 'message': trans('debtors_reminder_failed', default='Failed to send reminder'), 'details': api_response}), 500
             
+    except ValueError:
+        logger.error(f"Invalid debtor ID {debt_id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        return jsonify({'error': trans('debtors_invalid_id', default='Invalid debtor ID')}), 404
     except Exception as e:
-        logger.error(f"Error sending reminder: {str(e)}")
+        logger.error(f"Error sending reminder for debtor {debt_id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         return jsonify({'success': False, 'message': trans('debtors_reminder_error', default='An error occurred')}), 500
 
 @debtors_bp.route('/generate_iou/<id>')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def generate_iou(id):
     """Generate PDF IOU for a debtor (requires active trial/subscription)."""
     try:
@@ -244,16 +297,27 @@ def generate_iou(id):
             return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
         
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+            debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
+        
+        # Sanitize inputs for PDF generation
+        debtor['name'] = utils.sanitize_input(debtor['name'], max_length=100)
+        debtor['description'] = utils.sanitize_input(debtor.get('description', 'No description provided'), max_length=500)
+        debtor['contact'] = utils.sanitize_input(debtor.get('contact', 'N/A'), max_length=50)
+        
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
-        draw_ficore_pdf_header(p, current_user, y_start=10.5)
+        draw_ficore_pdf_header(p, current_user, y_start=10.5 * inch)
         
         # Calculate the Y position for the title
         header_height = 0.7  # From draw_ficore_pdf_header
@@ -264,14 +328,14 @@ def generate_iou(id):
         p.drawString(inch, title_y * inch, trans('debtors_iou_title', default='FiCore Records - IOU'))
         
         p.setFont("Helvetica", 12)
-        y_position = title_y - 0.5  # Start content below the title
+        y_position = title_y - 0.5
         p.drawString(inch, y_position * inch, f"{trans('general_name', default='Debtor')}: {debtor['name']}")
         y_position -= 0.3
         p.drawString(inch, y_position * inch, f"{trans('debtors_amount_owed', default='Amount Owed')}: {utils.format_currency(debtor['amount_owed'])}")
         y_position -= 0.3
-        p.drawString(inch, y_position * inch, f"{trans('general_contact', default='Contact')}: {debtor.get('contact', 'N/A')}")
+        p.drawString(inch, y_position * inch, f"{trans('general_contact', default='Contact')}: {debtor['contact']}")
         y_position -= 0.3
-        p.drawString(inch, y_position * inch, f"{trans('general_description', default='Description')}: {debtor.get('description', 'No description provided')}")
+        p.drawString(inch, y_position * inch, f"{trans('general_description', default='Description')}: {debtor['description']}")
         y_position -= 0.3
         p.drawString(inch, y_position * inch, f"{trans('debtors_date_recorded', default='Date Recorded')}: {utils.format_date(debtor['created_at'])}")
         y_position -= 0.3
@@ -288,18 +352,22 @@ def generate_iou(id):
             buffer.getvalue(),
             mimetype='application/pdf',
             headers={
-                'Content-Disposition': f'attachment; filename=FiCore_IOU_{debtor["name"]}.pdf'
+                'Content-Disposition': f'attachment; filename=FiCore_IOU_{utils.sanitize_input(debtor["name"], max_length=50)}.pdf'
             }
         )
         
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('debtors_invalid_id', default='Invalid debtor ID'), 'danger')
+        return redirect(url_for('debtors.index'))
     except Exception as e:
-        logger.error(f"Error generating IOU for debtor {id}: {str(e)}")
+        logger.error(f"Error generating IOU for debtor {id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_iou_generation_error', default='An error occurred'), 'danger')
         return redirect(url_for('debtors.index'))
 
 @debtors_bp.route('/generate_iou_csv/<id>')
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def generate_iou_csv(id):
     """Generate CSV IOU for a debtor (requires active trial/subscription)."""
     try:
@@ -308,12 +376,23 @@ def generate_iou_csv(id):
             return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
+        
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+            debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
+        
+        # Sanitize inputs for CSV generation
+        debtor['name'] = utils.sanitize_input(debtor['name'], max_length=100)
+        debtor['description'] = utils.sanitize_input(debtor.get('description', 'No description provided'), max_length=500)
+        debtor['contact'] = utils.sanitize_input(debtor.get('contact', 'N/A'), max_length=50)
         
         output = []
         output.extend(ficore_csv_header(current_user))
@@ -321,8 +400,8 @@ def generate_iou_csv(id):
         output.append([''])
         output.append([trans('general_name', default='Debtor'), debtor['name']])
         output.append([trans('debtors_amount_owed', default='Amount Owed'), utils.format_currency(debtor['amount_owed'])])
-        output.append([trans('general_contact', default='Contact'), debtor.get('contact', 'N/A')])
-        output.append([trans('general_description', default='Description'), debtor.get('description', 'No description provided')])
+        output.append([trans('general_contact', default='Contact'), debtor['contact']])
+        output.append([trans('general_description', default='Description'), debtor['description']])
         output.append([trans('debtors_date_recorded', default='Date Recorded'), utils.format_date(debtor['created_at'])])
         output.append([trans('debtors_reminders_sent', default='Reminders Sent'), debtor.get('reminder_count', 0)])
         output.append([''])
@@ -337,18 +416,22 @@ def generate_iou_csv(id):
             buffer,
             mimetype='text/csv',
             headers={
-                'Content-Disposition': f'attachment; filename=FiCore_IOU_{debtor["name"]}.csv'
+                'Content-Disposition': f'attachment; filename=FiCore_IOU_{utils.sanitize_input(debtor["name"], max_length=50)}.csv'
             }
         )
         
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('debtors_invalid_id', default='Invalid debtor ID'), 'danger')
+        return redirect(url_for('debtors.index'))
     except Exception as e:
-        logger.error(f"Error generating IOU CSV for debtor {id}: {str(e)}")
+        logger.error(f"Error generating IOU CSV for debtor {id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_iou_generation_error', default='An error occurred'), 'danger')
         return redirect(url_for('debtors.index'))
 
 @debtors_bp.route('/add', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def add():
     """Add a new debtor record (requires active trial/subscription)."""
     if not utils.can_user_interact(current_user):
@@ -362,11 +445,11 @@ def add():
             debtor_data = {
                 'user_id': str(current_user.id),
                 'type': 'debtor',
-                'name': form.name.data,
-                'contact': form.contact.data,
-                'amount_owed': form.amount_owed.data,
-                'description': form.description.data,
-                'created_at': datetime.utcnow(),
+                'name': utils.sanitize_input(form.name.data, max_length=100),
+                'contact': utils.sanitize_input(form.contact.data, max_length=50) if form.contact.data else None,
+                'amount_owed': utils.clean_currency(form.amount_owed.data),
+                'description': utils.sanitize_input(form.description.data, max_length=500) if form.description.data else None,
+                'created_at': datetime.now(timezone.utc),
                 'reminder_count': 0
             }
             db.records.insert_one(debtor_data)
@@ -374,7 +457,7 @@ def add():
             flash(trans('debtors_add_success', default='Debtor added successfully'), 'success')
             return redirect(url_for('debtors.index'))
         except Exception as e:
-            logger.error(f"Error adding debtor for user {current_user.id}: {str(e)}")
+            logger.error(f"Error adding debtor for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             flash(trans('debtors_add_error', default='An error occurred while adding debtor'), 'danger')
 
     return render_template(
@@ -386,18 +469,24 @@ def add():
 
 @debtors_bp.route('/edit/<id>', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def edit(id):
     """Edit an existing debtor record (requires active trial/subscription for POST)."""
     try:
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('debtors.index'))
-
+        
+        # Convert naive datetimes to timezone-aware
+        if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
+            debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if debtor.get('reminder_date') and debtor['reminder_date'].tzinfo is None:
+            debtor['reminder_date'] = debtor['reminder_date'].replace(tzinfo=ZoneInfo("UTC"))
+        
         form = DebtorForm(data={
             'name': debtor['name'],
             'contact': debtor.get('contact', ''),
@@ -413,11 +502,11 @@ def edit(id):
         if form.validate_on_submit():
             try:
                 updated_record = {
-                    'name': form.name.data,
-                    'contact': form.contact.data,
-                    'amount_owed': form.amount_owed.data,
-                    'description': form.description.data,
-                    'updated_at': datetime.utcnow()
+                    'name': utils.sanitize_input(form.name.data, max_length=100),
+                    'contact': utils.sanitize_input(form.contact.data, max_length=50) if form.contact.data else None,
+                    'amount_owed': utils.clean_currency(form.amount_owed.data),
+                    'description': utils.sanitize_input(form.description.data, max_length=500) if form.description.data else None,
+                    'updated_at': datetime.now(timezone.utc)
                 }
                 db.records.update_one(
                     {'_id': ObjectId(id)},
@@ -426,7 +515,7 @@ def edit(id):
                 flash(trans('debtors_edit_success', default='Debtor updated successfully'), 'success')
                 return redirect(url_for('debtors.index'))
             except Exception as e:
-                logger.error(f"Error updating debtor {id} for user {current_user.id}: {str(e)}")
+                logger.error(f"Error updating debtor {id} for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
                 flash(trans('debtors_edit_error', default='An error occurred'), 'danger')
 
         can_interact = utils.can_user_interact(current_user)
@@ -440,14 +529,18 @@ def edit(id):
             can_interact=can_interact,
             title=trans('debtors_edit_debtor', default='Edit Debtor', lang=session.get('lang', 'en'))
         )
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('debtors_invalid_id', default='Invalid debtor ID'), 'danger')
+        return redirect(url_for('debtors.index'))
     except Exception as e:
-        logger.error(f"Error fetching debtor {id} for user {current_user.id}: {str(e)}")
+        logger.error(f"Error fetching debtor {id} for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
         return redirect(url_for('debtors.index'))
 
 @debtors_bp.route('/delete/<id>', methods=['POST'])
 @login_required
-@utils.requires_role('trader')
+@utils.requires_role(['trader', 'admin'])
 def delete(id):
     """Delete a debtor record (requires active trial/subscription)."""
     try:
@@ -456,7 +549,7 @@ def delete(id):
             return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
-        query = {'_id': ObjectId(id), 'type': 'debtor'} if utils.is_admin() else {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
+        query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'debtor'}
         debtor = db.records.find_one(query)
         if not debtor:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
@@ -466,7 +559,10 @@ def delete(id):
             flash(trans('debtors_delete_success', default='Debtor deleted successfully'), 'success')
         else:
             flash(trans('debtors_record_not_found', default='Record not found'), 'danger')
+    except ValueError:
+        logger.error(f"Invalid debtor ID {id} for user {current_user.id}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('debtors_invalid_id', default='Invalid debtor ID'), 'danger')
     except Exception as e:
-        logger.error(f"Error deleting debtor {id} for user {current_user.id}: {str(e)}")
+        logger.error(f"Error deleting debtor {id} for user {current_user.id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('debtors_delete_error', default='An error occurred'), 'danger')
     return redirect(url_for('debtors.index'))
