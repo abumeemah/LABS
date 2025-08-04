@@ -35,7 +35,7 @@ receipts_bp = Blueprint('receipts', __name__, url_prefix='/receipts')
 
 @receipts_bp.route('/')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def index():
     """List all sales income cashflows for the current user."""
     try:
@@ -70,7 +70,7 @@ def index():
 
 @receipts_bp.route('/manage')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def manage():
     """Manage all receipt cashflows for the current user (edit/delete)."""
     try:
@@ -105,7 +105,7 @@ def manage():
 
 @receipts_bp.route('/view/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view(id):
     """View detailed information about a specific receipt."""
     try:
@@ -145,7 +145,7 @@ def view(id):
 
 @receipts_bp.route('/generate_pdf/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def generate_pdf(id):
     """Generate PDF receipt for a receipt transaction."""
     try:
@@ -231,7 +231,7 @@ def generate_pdf(id):
 
 @receipts_bp.route('/add', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def add():
     """Add a new receipt cashflow."""
@@ -291,7 +291,7 @@ def add():
 
 @receipts_bp.route('/edit/<id>', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def edit(id):
     """Edit an existing receipt cashflow."""
@@ -387,7 +387,7 @@ def edit(id):
 
 @receipts_bp.route('/delete/<id>', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def delete(id):
     """Delete a receipt cashflow."""
@@ -436,7 +436,7 @@ def delete(id):
 
 @receipts_bp.route('/share', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def share():
     """Share a receipt via SMS or WhatsApp."""
