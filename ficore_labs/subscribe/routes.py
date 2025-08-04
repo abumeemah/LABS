@@ -4,6 +4,7 @@ from flask_wtf.csrf import CSRFError
 from translations import trans
 from models import update_user, get_mongo_db
 import requests
+import utils
 import os
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
