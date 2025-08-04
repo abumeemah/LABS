@@ -40,7 +40,7 @@ creditors_bp = Blueprint('creditors', __name__, url_prefix='/creditors')
 
 @creditors_bp.route('/')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def index():
     """List all creditor records for the current user (view-only post-trial)."""
     try:
@@ -72,7 +72,7 @@ def index():
 
 @creditors_bp.route('/manage')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def manage():
     """List all creditor records for management (view-only post-trial)."""
     try:
@@ -106,7 +106,7 @@ def manage():
 
 @creditors_bp.route('/view/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view(id):
     """View detailed information about a specific creditor (JSON API, view-only post-trial)."""
     try:
@@ -138,7 +138,7 @@ def view(id):
 
 @creditors_bp.route('/view_page/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view_page(id):
     """Render a detailed view page for a specific creditor (view-only post-trial)."""
     try:
@@ -176,7 +176,7 @@ def view_page(id):
 
 @creditors_bp.route('/share/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def share(id):
     """Generate a WhatsApp link to share IOU details (requires active trial/subscription)."""
     try:
@@ -216,7 +216,7 @@ def share(id):
 
 @creditors_bp.route('/send_reminder', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def send_reminder():
     """Send delivery reminder to creditor via SMS/WhatsApp or set snooze (requires active trial/subscription)."""
     try:
@@ -287,7 +287,7 @@ def send_reminder():
 
 @creditors_bp.route('/generate_iou/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def generate_iou(id):
     """Generate PDF IOU for a creditor (requires active trial/subscription)."""
     try:
@@ -361,7 +361,7 @@ def generate_iou(id):
 
 @creditors_bp.route('/add', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def add():
     """Add a new creditor record (requires active trial/subscription)."""
     if not utils.can_user_interact(current_user):
@@ -397,7 +397,7 @@ def add():
 
 @creditors_bp.route('/edit/<id>', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def edit(id):
     """Edit an existing creditor record (requires active trial/subscription for POST)."""
     try:
@@ -465,7 +465,7 @@ def edit(id):
 
 @creditors_bp.route('/delete/<id>', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def delete(id):
     """Delete a creditor record (requires active trial/subscription)."""
     try:
