@@ -48,7 +48,7 @@
                                 <span class="h5 text-primary">{{ stats.total_debtors }}</span><br>
                                 <small class="text-muted">{{ stats.total_debtors_amount | format_currency }}</small>
                             </p>
-                            <a href="{{ url_for('debtors.view_all') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                            <a href="{{ url_for('debtors.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
                         </div>
                     </div>
                 </div>
@@ -63,7 +63,7 @@
                                 <span class="h5 text-primary">{{ stats.total_creditors }}</span><br>
                                 <small class="text-muted">{{ stats.total_creditors_amount | format_currency }}</small>
                             </p>
-                            <a href="{{ url_for('creditors.view_all') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                            <a href="{{ url_for('creditors.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
                         </div>
                     </div>
                 </div>
@@ -78,7 +78,7 @@
                                 <span class="h5 text-primary">{{ stats.total_payments + stats.total_receipts }}</span><br>
                                 <small class="text-muted">{{ trans('general_payments_receipts', default='Payments & Receipts') | escape }}</small>
                             </p>
-                            <a href="{{ url_for('cashflows.view_all') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                            <a href="{{ url_for('cashflows.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
                         </div>
                     </div>
                 </div>
@@ -93,7 +93,7 @@
                                 <span class="h5 text-primary">{{ stats.total_funds }}</span><br>
                                 <small class="text-muted">{{ stats.total_funds_amount | format_currency }}</small>
                             </p>
-                            <a href="{{ url_for('funds.view_all') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                            <a href="{{ url_for('funds.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
                         </div>
                     </div>
                 </div>
@@ -554,146 +554,77 @@
         </div>
     </div>
 </div>
-{% endblock %}
-{% block page_scripts %}
+
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tooltips
-    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    tooltipTriggerList.forEach(el => new bootstrap.Tooltip(el));
+    // JavaScript to handle modal data population
+    document.addEventListener('DOMContentLoaded', function () {
+        const modals = [
+            {
+                id: 'creditorActionsModal',
+                fields: ['Name', 'Amount', 'Contact', 'Description', 'Date'],
+                viewBtnId: 'creditorViewBtn',
+                editBtnId: 'creditorEditBtn',
+                deleteFormId: 'creditorDeleteForm'
+            },
+            {
+                id: 'debtorActionsModal',
+                fields: ['Name', 'Amount', 'Contact', 'Description', 'Date', 'Reminders'],
+                viewBtnId: 'debtorViewBtn',
+                editBtnId: 'debtorEditBtn',
+                deleteFormId: 'debtorDeleteForm'
+            },
+            {
+                id: 'paymentActionsModal',
+                fields: ['Recipient', 'Amount', 'Description', 'Date'],
+                viewBtnId: 'paymentViewBtn',
+                editBtnId: 'paymentEditBtn',
+                deleteFormId: 'paymentDeleteForm'
+            },
+            {
+                id: 'receiptActionsModal',
+                fields: ['Payer', 'Amount', 'Description', 'Date'],
+                viewBtnId: 'receiptViewBtn',
+                editBtnId: 'receiptEditBtn',
+                deleteFormId: 'receiptDeleteForm'
+            },
+            {
+                id: 'fundActionsModal',
+                fields: ['Source', 'Amount', 'Description', 'Date'],
+                viewBtnId: 'fundViewBtn',
+                editBtnId: 'fundEditBtn',
+                deleteFormId: 'fundDeleteForm'
+            }
+        ];
 
-    let currentData = null;
-
-    // Creditor Actions
-    document.querySelectorAll('#creditorActionsModal').forEach(modal => {
-        modal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            currentData = {
-                _id: button.dataset.id,
-                name: button.dataset.name,
-                amount: parseFloat(button.dataset.amount).toLocaleString(),
-                contact: button.dataset.contact,
-                date: button.dataset.date,
-                description: button.dataset.description
-            };
-
-            // Populate modal
-            document.getElementById('creditorModalName').textContent = currentData.name;
-            document.getElementById('creditorModalAmount').textContent = `{{ trans('general_currency_symbol', default='₦') | escape }}${currentData.amount}`;
-            document.getElementById('creditorModalContact').textContent = currentData.contact || '-';
-            document.getElementById('creditorModalDescription').textContent = currentData.description || '-';
-            document.getElementById('creditorModalDate').textContent = currentData.date;
-
-            // Update action buttons
-            document.getElementById('creditorViewBtn').href = `{{ url_for('creditors.view', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('creditorEditBtn').href = `{{ url_for('creditors.edit', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('creditorDeleteForm').action = `{{ url_for('creditors.delete', id='_id_') }}`.replace('_id_', currentData._id);
+        modals.forEach(modal => {
+            const modalElement = document.getElementById(modal.id);
+            modalElement.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const id = button.getAttribute('data-id');
+                modal.fields.forEach(field => {
+                    const element = document.getElementById(`${modal.id.replace('ActionsModal', 'Modal')}${field}`);
+                    if (element) {
+                        element.textContent = button.getAttribute(`data-${field.toLowerCase()}`) || 'N/A';
+                    }
+                });
+                const viewBtn = document.getElementById(modal.viewBtnId);
+                const editBtn = document.getElementById(modal.editBtnId);
+                const deleteForm = document.getElementById(modal.deleteFormId);
+                const blueprint = modal.id.toLowerCase().includes('creditor') ? 'creditors' :
+                                 modal.id.toLowerCase().includes('debtor') ? 'debtors' :
+                                 modal.id.toLowerCase().includes('payment') ? 'payments' :
+                                 modal.id.toLowerCase().includes('receipt') ? 'receipts' : 'funds';
+                if (viewBtn) {
+                    viewBtn.href = `/${blueprint}/view_page/${id}`;
+                }
+                if (editBtn) {
+                    editBtn.href = `/${blueprint}/edit/${id}`;
+                }
+                if (deleteForm) {
+                    deleteForm.action = `/${blueprint}/delete/${id}`;
+                }
+            });
         });
     });
-
-    // Debtor Actions
-    document.querySelectorAll('#debtorActionsModal').forEach(modal => {
-        modal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            currentData = {
-                _id: button.dataset.id,
-                name: button.dataset.name,
-                amount: parseFloat(button.dataset.amount).toLocaleString(),
-                contact: button.dataset.contact,
-                date: button.dataset.date,
-                reminders: button.dataset.reminders,
-                description: button.dataset.description
-            };
-
-            // Populate modal
-            document.getElementById('debtorModalName').textContent = currentData.name;
-            document.getElementById('debtorModalAmount').textContent = `{{ trans('general_currency_symbol', default='₦') | escape }}${currentData.amount}`;
-            document.getElementById('debtorModalContact').textContent = currentData.contact || '-';
-            document.getElementById('debtorModalDescription').textContent = currentData.description || '-';
-            document.getElementById('debtorModalDate').textContent = currentData.date;
-            document.getElementById('debtorModalReminders').textContent = currentData.reminders;
-
-            // Update action buttons
-            document.getElementById('debtorViewBtn').href = `{{ url_for('debtors.view', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('debtorEditBtn').href = `{{ url_for('debtors.edit', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('debtorDeleteForm').action = `{{ url_for('debtors.delete', id='_id_') }}`.replace('_id_', currentData._id);
-        });
-    });
-
-    // Payment Actions
-    document.querySelectorAll('#paymentActionsModal').forEach(modal => {
-        modal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            currentData = {
-                _id: button.dataset.id,
-                recipient: button.dataset.recipient,
-                amount: parseFloat(button.dataset.amount).toLocaleString(),
-                date: button.dataset.date,
-                description: button.dataset.description
-            };
-
-            // Populate modal
-            document.getElementById('paymentModalRecipient').textContent = currentData.recipient;
-            document.getElementById('paymentModalAmount').textContent = `{{ trans('general_currency_symbol', default='₦') | escape }}${currentData.amount}`;
-            document.getElementById('paymentModalDescription').textContent = currentData.description || '-';
-            document.getElementById('paymentModalDate').textContent = currentData.date;
-
-            // Update action buttons
-            document.getElementById('paymentViewBtn').href = `{{ url_for('payments.view', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('paymentEditBtn').href = `{{ url_for('payments.edit', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('paymentDeleteForm').action = `{{ url_for('payments.delete', id='_id_') }}`.replace('_id_', currentData._id);
-        });
-    });
-
-    // Receipt Actions
-    document.querySelectorAll('#receiptActionsModal').forEach(modal => {
-        modal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            currentData = {
-                _id: button.dataset.id,
-                payer: button.dataset.payer,
-                amount: parseFloat(button.dataset.amount).toLocaleString(),
-                date: button.dataset.date,
-                description: button.dataset.description
-            };
-
-            // Populate modal
-            document.getElementById('receiptModalPayer').textContent = currentData.payer;
-            document.getElementById('receiptModalAmount').textContent = `{{ trans('general_currency_symbol', default='₦') | escape }}${currentData.amount}`;
-            document.getElementById('receiptModalDescription').textContent = currentData.description || '-';
-            document.getElementById('receiptModalDate').textContent = currentData.date;
-
-            // Update action buttons
-            document.getElementById('receiptViewBtn').href = `{{ url_for('receipts.view', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('receiptEditBtn').href = `{{ url_for('receipts.edit', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('receiptDeleteForm').action = `{{ url_for('receipts.delete', id='_id_') }}`.replace('_id_', currentData._id);
-        });
-    });
-
-    // Fund Actions
-    document.querySelectorAll('#fundActionsModal').forEach(modal => {
-        modal.addEventListener('show.bs.modal', (event) => {
-            const button = event.relatedTarget;
-            currentData = {
-                _id: button.dataset.id,
-                source: button.dataset.source,
-                amount: parseFloat(button.dataset.amount).toLocaleString(),
-                date: button.dataset.date,
-                description: button.dataset.description
-            };
-
-            // Populate modal
-            document.getElementById('fundModalSource').textContent = currentData.source;
-            document.getElementById('fundModalAmount').textContent = `{{ trans('general_currency_symbol', default='₦') | escape }}${currentData.amount}`;
-            document.getElementById('fundModalDescription').textContent = currentData.description || '-';
-            document.getElementById('fundModalDate').textContent = currentData.date;
-
-            // Update action buttons
-            document.getElementById('fundViewBtn').href = `{{ url_for('funds.view', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('fundEditBtn').href = `{{ url_for('funds.edit', id='_id_') }}`.replace('_id_', currentData._id);
-            document.getElementById('fundDeleteForm').action = `{{ url_for('funds.delete', id='_id_') }}`.replace('_id_', currentData._id);
-        });
-    });
-});
 </script>
 {% endblock %}
