@@ -24,7 +24,7 @@ from flask_limiter.util import get_remote_address
 from users.routes import get_post_login_redirect  # Import the helper function
 from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
-    UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
+    TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
 )
 from translations import register_translation, trans, get_translations, get_all_translations, get_module_translations
 
