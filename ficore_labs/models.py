@@ -1,6 +1,6 @@
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId
-from datetime import datetime, timedelta, timezone  # Added timezone import
+from datetime import datetime, timedelta, timezone
 import logging
 import uuid
 from werkzeug.security import generate_password_hash
@@ -28,6 +28,81 @@ def get_db():
         return db
     except Exception as e:
         logger.error(f"Error connecting to database: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
+        raise
+
+def migrate_naive_datetimes():
+    """
+    One-time migration script to convert naive datetime fields to UTC-aware datetimes
+    in all relevant collections.
+    """
+    try:
+        db = get_db()
+        migration_flag = db.system_config.find_one({'_id': 'datetime_migration_completed'})
+        if migration_flag and migration_flag.get('value'):
+            logger.info("Datetime migration already completed, skipping.", extra={'session_id': 'no-session-id'})
+            return
+
+        # Define collections and their datetime fields
+        datetime_fields_by_collection = {
+            'users': ['trial_start', 'trial_end', 'subscription_start', 'subscription_end', 'created_at', 'reset_token_expiry', 'otp_expiry'],
+            'records': ['created_at', 'updated_at', 'forecast_date', 'report_date'],
+            'cashflows': ['created_at', 'updated_at'],
+            'audit_logs': ['timestamp'],
+            'temp_passwords': ['created_at', 'expires_at'],
+            'feedback': ['timestamp'],
+            'notifications': ['timestamp'],
+            'kyc_records': ['created_at', 'updated_at'],
+            'sessions': ['created_at', 'expires_at'],  # Assuming sessions collection exists
+            'tool_usage': ['timestamp'],  # Assuming tool_usage collection exists
+            'reminder_logs': ['timestamp']  # Assuming reminder_logs collection exists
+        }
+
+        for collection_name, datetime_fields in datetime_fields_by_collection.items():
+            if collection_name not in db.list_collection_names():
+                logger.info(f"Collection {collection_name} does not exist, skipping.", extra={'session_id': 'no-session-id'})
+                continue
+
+            collection = db[collection_name]
+            query = {
+                '$or': [{field: {'$type': 'date', '$not': {'$type': 'timestamp'}}} for field in datetime_fields]
+            }
+            documents = collection.find(query)
+
+            updated_count = 0
+            for doc in documents:
+                updates = {}
+                for field in datetime_fields:
+                    if field in doc and isinstance(doc[field], datetime) and doc[field].tzinfo is None:
+                        # Convert naive datetime to UTC-aware
+                        updates[field] = doc[field].replace(tzinfo=timezone.utc)
+                
+                if updates:
+                    result = collection.update_one(
+                        {'_id': doc['_id']},
+                        {'$set': updates}
+                    )
+                    if result.modified_count > 0:
+                        updated_count += 1
+                        logger.info(
+                            f"Updated naive datetimes in {collection_name} for document ID {doc['_id']}: {updates}",
+                            extra={'session_id': 'no-session-id'}
+                        )
+
+            logger.info(
+                f"Completed migration for {collection_name}: {updated_count} documents updated",
+                extra={'session_id': 'no-session-id'}
+            )
+
+        # Mark migration as complete
+        db.system_config.update_one(
+            {'_id': 'datetime_migration_completed'},
+            {'$set': {'value': True}},
+            upsert=True
+        )
+        logger.info("Marked datetime migration as completed in system_config", extra={'session_id': 'no-session-id'})
+
+    except Exception as e:
+        logger.error(f"Failed to migrate naive datetimes: {str(e)}", exc_info=True, extra={'session_id': 'no-session-id'})
         raise
 
 def initialize_app_data(app):
@@ -64,13 +139,12 @@ def initialize_app_data(app):
             # Create or update default admin user if it doesn't exist or lacks required fields
             admin_user = db_instance.users.find_one({'_id': 'admin', 'role': 'admin'})
             if not admin_user or 'password_hash' not in admin_user:
-                # Check if user with _id 'ficorerecords' exists
                 ficore_user = db_instance.users.find_one({'_id': 'ficorerecords'})
                 if not ficore_user:
                     admin_data = {
                         '_id': 'admin',
                         'email': 'ficorerecords@gmail.com',
-                        'password_hash': generate_password_hash('Admin123!'),  # Hash the password
+                        'password_hash': generate_password_hash('Admin123!'),
                         'role': 'admin',
                         'is_admin': True,
                         'display_name': 'Admin',
@@ -79,13 +153,12 @@ def initialize_app_data(app):
                         'is_trial': False,
                         'is_subscribed': True,
                         'subscription_plan': 'admin',
-                        'subscription_start': datetime.now(timezone.utc),  # Updated to timezone-aware
+                        'subscription_start': datetime.now(timezone.utc),
                         'subscription_end': None,
-                        'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
+                        'created_at': datetime.now(timezone.utc)
                     }
                     try:
                         if admin_user:
-                            # Update existing admin user if missing password_hash
                             db_instance.users.update_one(
                                 {'_id': 'admin'},
                                 {'$set': admin_data, '$unset': {'password': ''}},
@@ -93,7 +166,6 @@ def initialize_app_data(app):
                             )
                             logger.info(f"Updated default admin user: {admin_data['_id']}", extra={'session_id': 'no-session-id'})
                         else:
-                            # Create new admin user
                             created_user = create_user(db_instance, admin_data)
                             logger.info(f"Created default admin user: {created_user.id}", extra={'session_id': 'no-session-id'})
                     except DuplicateKeyError:
@@ -284,7 +356,7 @@ def initialize_app_data(app):
                     },
                     'indexes': [
                         {'key': [('user_id', ASCENDING)], 'unique': True},
-                        {'key': [('expires_at', ASCENDING)], 'expireAfterSeconds': 604800}  # 7 days
+                        {'key': [('expires_at', ASCENDING)], 'expireAfterSeconds': 604800}
                     ]
                 },
                 'feedback': {
@@ -356,7 +428,6 @@ def initialize_app_data(app):
                 }
             }
                 
-            # Initialize collections and indexes
             for collection_name, config in collection_schemas.items():
                 if collection_name in collections:
                     try:
@@ -463,8 +534,8 @@ def initialize_app_data(app):
                                         {
                                             '$set': {
                                                 'temp_password': temp_password,
-                                                'created_at': datetime.now(timezone.utc),  # Updated to timezone-aware
-                                                'expires_at': datetime.now(timezone.utc) + timedelta(days=7)  # Updated to timezone-aware
+                                                'created_at': datetime.now(timezone.utc),
+                                                'expires_at': datetime.now(timezone.utc) + timedelta(days=7)
                                             },
                                             '$setOnInsert': {
                                                 '_id': ObjectId(),
@@ -485,8 +556,8 @@ def initialize_app_data(app):
                                     raise
                             if 'is_trial' not in user:
                                 updates['is_trial'] = True
-                                updates['trial_start'] = datetime.now(timezone.utc)  # Updated to timezone-aware
-                                updates['trial_end'] = datetime.now(timezone.utc) + timedelta(days=30)  # Updated to timezone-aware
+                                updates['trial_start'] = datetime.now(timezone.utc)
+                                updates['trial_end'] = datetime.now(timezone.utc) + timedelta(days=30)
                                 updates['is_subscribed'] = False
                                 updates['subscription_plan'] = None
                                 updates['subscription_start'] = None
@@ -523,6 +594,15 @@ def initialize_app_data(app):
                     logger.error(f"Failed to fix user documents: {str(e)}", 
                                 exc_info=True, extra={'session_id': 'no-session-id'})
                     raise
+            
+            # Run datetime migration
+            try:
+                migrate_naive_datetimes()
+            except Exception as e:
+                logger.error(f"Failed to run datetime migration: {str(e)}", 
+                            exc_info=True, extra={'session_id': 'no-session-id'})
+                raise
+                
         except Exception as e:
             logger.error(f"{trans('general_database_initialization_failed', default='Failed to initialize database')}: {str(e)}", 
                         exc_info=True, extra={'session_id': 'no-session-id'})
@@ -543,8 +623,8 @@ class User:
         self.setup_complete = setup_complete
         self.language = language
         self.is_trial = is_trial
-        self.trial_start = trial_start or datetime.now(timezone.utc)  # Updated to timezone-aware
-        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))  # Updated to timezone-aware
+        self.trial_start = trial_start or datetime.now(timezone.utc)
+        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))
         self.is_subscribed = is_subscribed
         self.subscription_plan = subscription_plan
         self.subscription_start = subscription_start
@@ -583,14 +663,14 @@ class User:
         """
         if self.is_subscribed and self.subscription_end:
             subscription_end_aware = (
-                self.subscription_end.replace(tzinfo=ZoneInfo("UTC"))
+                self.subscription_end.replace(tzinfo=timezone.utc)
                 if self.subscription_end.tzinfo is None
                 else self.subscription_end
             )
             return datetime.now(timezone.utc) <= subscription_end_aware
         if self.is_trial and self.trial_end:
             trial_end_aware = (
-                self.trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                self.trial_end.replace(tzinfo=timezone.utc)
                 if self.trial_end.tzinfo is None
                 else self.trial_end
             )
@@ -624,13 +704,13 @@ def create_user(db, user_data):
             'setup_complete': user_data.get('setup_complete', False),
             'language': user_data.get('language', 'en'),
             'is_trial': True,
-            'trial_start': datetime.now(timezone.utc),  # Updated to timezone-aware
-            'trial_end': datetime.now(timezone.utc) + timedelta(days=30),  # Updated to timezone-aware
+            'trial_start': datetime.now(timezone.utc),
+            'trial_end': datetime.now(timezone.utc) + timedelta(days=30),
             'is_subscribed': False,
             'subscription_plan': None,
             'subscription_start': None,
             'subscription_end': None,
-            'created_at': datetime.now(timezone.utc),  # Updated to timezone-aware
+            'created_at': datetime.now(timezone.utc),
             'business_details': user_data.get('business_details'),
             'profile_picture': user_data.get('profile_picture', None),
             'phone': user_data.get('phone', None),
@@ -857,7 +937,7 @@ def update_record(db, record_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
+        update_data['updated_at'] = datetime.now(timezone.utc)
         result = db.records.update_one(
             {'_id': ObjectId(record_id)},
             {'$set': update_data}
@@ -929,7 +1009,7 @@ def update_cashflow(db, cashflow_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
+        update_data['updated_at'] = datetime.now(timezone.utc)
         result = db.cashflows.update_one(
             {'_id': ObjectId(cashflow_id)},
             {'$set': update_data}
@@ -1220,7 +1300,7 @@ def update_kyc_record(db, kyc_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
+        update_data['updated_at'] = datetime.now(timezone.utc)
         result = db.kyc_records.update_one(
             {'_id': ObjectId(kyc_id)},
             {'$set': update_data}
