@@ -1,20 +1,23 @@
 from flask import Blueprint, session, request, render_template, redirect, url_for, flash, jsonify, current_app, Response
 from flask_login import login_required, current_user
+from flask_wtf import FlaskForm
+from flask_wtf.csrf import CSRFError
 from translations import trans
 import utils
 from bson import ObjectId
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import inch
 from io import BytesIO, StringIO
-from flask_wtf import FlaskForm
 from wtforms import DateField, StringField, SubmitField, SelectField
-from wtforms.validators import Optional
+from wtforms.validators import Optional, Length
 import csv
 import logging
 from helpers.branding_helpers import draw_ficore_pdf_header, ficore_csv_header
+import pymongo.errors
 
 logger = logging.getLogger(__name__)
 
@@ -23,32 +26,39 @@ reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 class ReportForm(FlaskForm):
     start_date = DateField(trans('reports_start_date', default='Start Date'), validators=[Optional()])
     end_date = DateField(trans('reports_end_date', default='End Date'), validators=[Optional()])
-    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html')
+    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html', validators=[Optional()])
     submit = SubmitField(trans('reports_generate_report', default='Generate Report'))
 
 class CustomerReportForm(FlaskForm):
-    role = SelectField('User Role', choices=[('', 'All'), ('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[Optional()])
-    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html')
+    role = SelectField('User Role', choices=[('', 'All'), ('trader', 'Trader'), ('startup', 'Startup'), ('admin', 'Admin')], validators=[Optional(), Length(max=20)])
+    format = SelectField('Format', choices=[('html', 'HTML'), ('pdf', 'PDF'), ('csv', 'CSV')], default='html', validators=[Optional()])
     submit = SubmitField('Generate Report')
 
 def to_dict_record(record):
     if not record:
         return {'name': None, 'amount_owed': None}
     try:
+        if record.get('created_at') and record['created_at'].tzinfo is None:
+            record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('updated_at') and record['updated_at'].tzinfo is None:
+            record['updated_at'] = record['updated_at'].replace(tzinfo=ZoneInfo("UTC"))
         created_at = utils.format_date(record.get('created_at'), format_type='iso') if record.get('created_at') else None
         updated_at = utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
     except Exception as e:
-        logger.error(f"Error formatting dates in to_dict_record: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error formatting dates in to_dict_record: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'}
+        )
         created_at = None
         updated_at = None
     return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'type': record.get('type', ''),
-        'name': record.get('name', ''),
-        'contact': record.get('contact', ''),
+        'type': utils.sanitize_input(record.get('type', ''), max_length=20),
+        'name': utils.sanitize_input(record.get('name', ''), max_length=100),
+        'contact': utils.sanitize_input(record.get('contact', ''), max_length=100),
         'amount_owed': record.get('amount_owed', 0),
-        'description': record.get('description', ''),
+        'description': utils.sanitize_input(record.get('description', ''), max_length=1000),
         'created_at': created_at,
         'updated_at': updated_at
     }
@@ -56,308 +66,659 @@ def to_dict_record(record):
 def to_dict_cashflow(record):
     if not record:
         return {'party_name': None, 'amount': None}
-    result = {
+    try:
+        if record.get('created_at') and record['created_at'].tzinfo is None:
+            record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('updated_at') and record['updated_at'].tzinfo is None:
+            record['updated_at'] = record['updated_at'].replace(tzinfo=ZoneInfo("UTC"))
+        created_at = utils.format_date(record.get('created_at'), format_type='iso')
+        updated_at = utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+    except Exception as e:
+        logger.error(
+            f"Error formatting dates in to_dict_cashflow: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'}
+        )
+        created_at = None
+        updated_at = None
+    return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'type': record.get('type', ''),
-        'party_name': record.get('party_name', ''),
+        'type': utils.sanitize_input(record.get('type', ''), max_length=20),
+        'party_name': utils.sanitize_input(record.get('party_name', ''), max_length=100),
         'amount': record.get('amount', 0),
-        'method': record.get('method', ''),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        'method': utils.sanitize_input(record.get('method', ''), max_length=50),
+        'created_at': created_at,
+        'updated_at': updated_at
     }
-    for key, value in result.items():
-        if isinstance(value, date) and not isinstance(value, datetime):
-            result[key] = datetime.combine(value, datetime.min.time())
-    return result
 
 def to_dict_fund(record):
     if not record:
         return {'source': None, 'amount': None}
+    try:
+        if record.get('created_at') and record['created_at'].tzinfo is None:
+            record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('updated_at') and record['updated_at'].tzinfo is None:
+            record['updated_at'] = record['updated_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('date_received') and record['date_received'].tzinfo is None:
+            record['date_received'] = record['date_received'].replace(tzinfo=ZoneInfo("UTC"))
+        created_at = utils.format_date(record.get('created_at'), format_type='iso')
+        updated_at = utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        date_received = utils.format_date(record.get('date_received'), format_type='iso') if record.get('date_received') else None
+    except Exception as e:
+        logger.error(
+            f"Error formatting dates in to_dict_fund: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'}
+        )
+        created_at = None
+        updated_at = None
+        date_received = None
     return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'source': record.get('source', ''),
+        'source': utils.sanitize_input(record.get('source', ''), max_length=100),
         'amount': record.get('amount', 0),
-        'date_received': utils.format_date(record.get('date_received'), format_type='iso') if record.get('date_received') else None,
-        'status': record.get('status', ''),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        'date_received': date_received,
+        'status': utils.sanitize_input(record.get('status', ''), max_length=50),
+        'created_at': created_at,
+        'updated_at': updated_at
     }
 
 def to_dict_forecast(record):
     if not record:
         return {'scenario': None, 'projected_revenue': None}
+    try:
+        if record.get('created_at') and record['created_at'].tzinfo is None:
+            record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('updated_at') and record['updated_at'].tzinfo is None:
+            record['updated_at'] = record['updated_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('period_start') and record['period_start'].tzinfo is None:
+            record['period_start'] = record['period_start'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('period_end') and record['period_end'].tzinfo is None:
+            record['period_end'] = record['period_end'].replace(tzinfo=ZoneInfo("UTC"))
+        created_at = utils.format_date(record.get('created_at'), format_type='iso')
+        updated_at = utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        period_start = utils.format_date(record.get('period_start'), format_type='iso') if record.get('period_start') else None
+        period_end = utils.format_date(record.get('period_end'), format_type='iso') if record.get('period_end') else None
+    except Exception as e:
+        logger.error(
+            f"Error formatting dates in to_dict_forecast: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'}
+        )
+        created_at = None
+        updated_at = None
+        period_start = None
+        period_end = None
     return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'scenario': record.get('scenario', ''),
+        'scenario': utils.sanitize_input(record.get('scenario', ''), max_length=100),
         'projected_revenue': record.get('projected_revenue', 0),
         'projected_expenses': record.get('projected_expenses', 0),
-        'period_start': utils.format_date(record.get('period_start'), format_type='iso') if record.get('period_start') else None,
-        'period_end': utils.format_date(record.get('period_end'), format_type='iso') if record.get('period_end') else None,
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        'period_start': period_start,
+        'period_end': period_end,
+        'created_at': created_at,
+        'updated_at': updated_at
     }
 
 def to_dict_investor_report(record):
     if not record:
         return {'title': None, 'financial_metrics': None}
+    try:
+        if record.get('created_at') and record['created_at'].tzinfo is None:
+            record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+        if record.get('updated_at') and record['updated_at'].tzinfo is None:
+            record['updated_at'] = record['updated_at'].replace(tzinfo=ZoneInfo("UTC"))
+        created_at = utils.format_date(record.get('created_at'), format_type='iso')
+        updated_at = utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+    except Exception as e:
+        logger.error(
+            f"Error formatting dates in to_dict_investor_report: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'}
+        )
+        created_at = None
+        updated_at = None
     return {
         'id': str(record.get('_id', '')),
         'user_id': str(record.get('user_id', '')),
-        'title': record.get('title', ''),
+        'title': utils.sanitize_input(record.get('title', ''), max_length=100),
         'financial_metrics': record.get('financial_metrics', {}),
-        'created_at': utils.format_date(record.get('created_at'), format_type='iso'),
-        'updated_at': utils.format_date(record.get('updated_at'), format_type='iso') if record.get('updated_at') else None
+        'created_at': created_at,
+        'updated_at': updated_at
     }
 
 @reports_bp.route('/')
 @login_required
-@utils.requires_role(['trader', 'startup'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def index():
     try:
         can_interact = utils.can_user_interact(current_user)
+        logger.info(
+            f"Rendering reports index for user {current_user.id}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         return render_template(
             'reports/index.html',
-            title=utils.trans('reports_index', default='Reports', lang=session.get('lang', 'en')),
+            title=trans('reports_index', default='Reports', lang=session.get('lang', 'en')),
             can_interact=can_interact
         )
     except Exception as e:
-        logger.error(f"Error loading reports index for user {current_user.id}: {str(e)}", exc_info=True)
+        logger.error(
+            f"Error loading reports index for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('reports_load_error', default='An error occurred'), 'danger')
         return redirect(url_for('dashboard.index'))
 
 @reports_bp.route('/profit_loss', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'startup'])
+@utils.requires_role(['trader', 'startup', 'admin'])
+@utils.limiter.limit('10 per minute')
 def profit_loss():
     form = ReportForm()
     can_interact = utils.can_user_interact(current_user)
     if not can_interact:
+        logger.warning(
+            f"Subscription required for user {current_user.id} to generate profit/loss report",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
-        return redirect(url_for('subscribe.index'))
+        return redirect(url_for('subscribe_bp.subscribe'))
     cashflows = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    query = {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
+            if form.format.data not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {form.format.data} for profit/loss report by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.profit_loss'))
             db = utils.get_mongo_db()
             if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = {'$gte': start_datetime}
             if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
             cashflows = [to_dict_cashflow(cf) for cf in db.cashflows.find(query).sort('created_at', -1)]
             output_format = form.format.data
+            logger.info(
+                f"Generating profit/loss report for user {current_user.id}, format: {output_format}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if output_format == 'pdf':
                 return generate_profit_loss_pdf(cashflows)
             elif output_format == 'csv':
                 return generate_profit_loss_csv(cashflows)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating profit/loss report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating profit/loss report for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating profit/loss report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
             cashflows = [to_dict_cashflow(cf) for cf in db.cashflows.find(query).sort('created_at', -1)]
-        except Exception as e:
-            logger.error(f"Error fetching cashflows for user {current_user.id}: {str(e)}", exc_info=True)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error fetching cashflows for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+        except Exception as e:
+            logger.error(
+                f"Error fetching cashflows for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    logger.info(
+        f"Rendering profit/loss report page for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template(
         'reports/profit_loss.html',
         form=form,
         cashflows=cashflows,
-        title=utils.trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en')),
+        title=trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en')),
         can_interact=can_interact
     )
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in profit/loss report for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template(
+            'reports/profit_loss.html',
+            form=form,
+            cashflows=cashflows,
+            title=trans('reports_profit_loss', default='Profit/Loss Report', lang=session.get('lang', 'en')),
+            can_interact=can_interact
+        ), 400
 
 @reports_bp.route('/debtors_creditors', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'startup'])
+@utils.requires_role(['trader', 'startup', 'admin'])
+@utils.limiter.limit('10 per minute')
 def debtors_creditors():
     form = ReportForm()
     can_interact = utils.can_user_interact(current_user)
     if not can_interact:
+        logger.warning(
+            f"Subscription required for user {current_user.id} to generate debtors/creditors report",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
-        return redirect(url_for('subscribe.index'))
+        return redirect(url_for('subscribe_bp.subscribe'))
     records = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    query = {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
+            if form.format.data not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {form.format.data} for debtors/creditors report by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.debtors_creditors'))
             db = utils.get_mongo_db()
             if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = {'$gte': start_datetime}
             if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
             records = [to_dict_record(r) for r in db.records.find(query).sort('created_at', -1)]
             output_format = form.format.data
+            logger.info(
+                f"Generating debtors/creditors report for user {current_user.id}, format: {output_format}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if output_format == 'pdf':
                 return generate_debtors_creditors_pdf(records)
             elif output_format == 'csv':
                 return generate_debtors_creditors_csv(records)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating debtors/creditors report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating debtors/creditors report for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating debtors/creditors report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
             records = [to_dict_record(r) for r in db.records.find(query).sort('created_at', -1)]
-        except Exception as e:
-            logger.error(f"Error fetching records for user {current_user.id}: {str(e)}", exc_info=True)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error fetching records for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+        except Exception as e:
+            logger.error(
+                f"Error fetching records for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    logger.info(
+        f"Rendering debtors/creditors report page for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template(
         'reports/debtors_creditors.html',
         form=form,
         records=records,
-        title=utils.trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en')),
+        title=trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en')),
         can_interact=can_interact
     )
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in debtors/creditors report for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template(
+            'reports/debtors_creditors.html',
+            form=form,
+            records=records,
+            title=trans('reports_debtors_creditors', default='Debtors/Creditors Report', lang=session.get('lang', 'en')),
+            can_interact=can_interact
+        ), 400
 
 @reports_bp.route('/funds', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['startup'])
+@utils.requires_role(['startup', 'admin'])
+@utils.limiter.limit('10 per minute')
 def funds():
     form = ReportForm()
     can_interact = utils.can_user_interact(current_user)
     if not can_interact:
+        logger.warning(
+            f"Subscription required for user {current_user.id} to generate funds report",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
-        return redirect(url_for('subscribe.index'))
+        return redirect(url_for('subscribe_bp.subscribe'))
     funds = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    query = {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
+            if form.format.data not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {form.format.data} for funds report by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.funds'))
             db = utils.get_mongo_db()
             if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = {'$gte': start_datetime}
             if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
             funds = [to_dict_fund(f) for f in db.funds.find(query).sort('created_at', -1)]
             output_format = form.format.data
+            logger.info(
+                f"Generating funds report for user {current_user.id}, format: {output_format}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if output_format == 'pdf':
                 return generate_funds_pdf(funds)
             elif output_format == 'csv':
                 return generate_funds_csv(funds)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating funds report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating funds report for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating funds report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
             funds = [to_dict_fund(f) for f in db.funds.find(query).sort('created_at', -1)]
-        except Exception as e:
-            logger.error(f"Error fetching funds for user {current_user.id}: {str(e)}", exc_info=True)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error fetching funds for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+        except Exception as e:
+            logger.error(
+                f"Error fetching funds for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    logger.info(
+        f"Rendering funds report page for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template(
         'reports/funds.html',
         form=form,
         funds=funds,
-        title=utils.trans('reports_funds', default='Funds Report', lang=session.get('lang', 'en')),
+        title=trans('reports_funds', default='Funds Report', lang=session.get('lang', 'en')),
         can_interact=can_interact
     )
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in funds report for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template(
+            'reports/funds.html',
+            form=form,
+            funds=funds,
+            title=trans('reports_funds', default='Funds Report', lang=session.get('lang', 'en')),
+            can_interact=can_interact
+        ), 400
 
 @reports_bp.route('/forecasts', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['startup'])
+@utils.requires_role(['startup', 'admin'])
+@utils.limiter.limit('10 per minute')
 def forecasts():
     form = ReportForm()
     can_interact = utils.can_user_interact(current_user)
     if not can_interact:
+        logger.warning(
+            f"Subscription required for user {current_user.id} to generate forecasts report",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
-        return redirect(url_for('subscribe.index'))
+        return redirect(url_for('subscribe_bp.subscribe'))
     forecasts = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    query = {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
+            if form.format.data not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {form.format.data} for forecasts report by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.forecasts'))
             db = utils.get_mongo_db()
             if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 query['period_start'] = {'$gte': start_datetime}
             if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
                 query['period_end'] = query.get('period_end', {}) | {'$lte': end_datetime}
             forecasts = [to_dict_forecast(f) for f in db.forecasts.find(query).sort('created_at', -1)]
             output_format = form.format.data
+            logger.info(
+                f"Generating forecasts report for user {current_user.id}, format: {output_format}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if output_format == 'pdf':
                 return generate_forecasts_pdf(forecasts)
             elif output_format == 'csv':
                 return generate_forecasts_csv(forecasts)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating forecasts report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating forecasts report for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating forecasts report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
             forecasts = [to_dict_forecast(f) for f in db.forecasts.find(query).sort('created_at', -1)]
-        except Exception as e:
-            logger.error(f"Error fetching forecasts for user {current_user.id}: {str(e)}", exc_info=True)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error fetching forecasts for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+        except Exception as e:
+            logger.error(
+                f"Error fetching forecasts for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    logger.info(
+        f"Rendering forecasts report page for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template(
         'reports/forecasts.html',
         form=form,
         forecasts=forecasts,
-        title=utils.trans('reports_forecasts', default='Forecasts Report', lang=session.get('lang', 'en')),
+        title=trans('reports_forecasts', default='Forecasts Report', lang=session.get('lang', 'en')),
         can_interact=can_interact
     )
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in forecasts report for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template(
+            'reports/forecasts.html',
+            form=form,
+            forecasts=forecasts,
+            title=trans('reports_forecasts', default='Forecasts Report', lang=session.get('lang', 'en')),
+            can_interact=can_interact
+        ), 400
 
 @reports_bp.route('/investor_reports', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['startup'])
+@utils.requires_role(['startup', 'admin'])
+@utils.limiter.limit('10 per minute')
 def investor_reports():
     form = ReportForm()
     can_interact = utils.can_user_interact(current_user)
     if not can_interact:
+        logger.warning(
+            f"Subscription required for user {current_user.id} to generate investor reports",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         flash(trans('subscription_required', default='Subscription required to generate reports. Please subscribe.'), 'warning')
-        return redirect(url_for('subscribe.index'))
+        return redirect(url_for('subscribe_bp.subscribe'))
     reports = []
-    query = {} if utils.is_admin() else {'user_id': str(current_user.id)}
+    query = {'user_id': str(current_user.id)}
     if form.validate_on_submit():
         try:
+            if form.format.data not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {form.format.data} for investor reports by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.investor_reports'))
             db = utils.get_mongo_db()
             if form.start_date.data:
-                start_datetime = datetime.combine(form.start_date.data, datetime.min.time())
+                start_datetime = datetime.combine(form.start_date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = {'$gte': start_datetime}
             if form.end_date.data:
-                end_datetime = datetime.combine(form.end_date.data, datetime.max.time())
+                end_datetime = datetime.combine(form.end_date.data, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
                 query['created_at'] = query.get('created_at', {}) | {'$lte': end_datetime}
             reports = [to_dict_investor_report(r) for r in db.investor_reports.find(query).sort('created_at', -1)]
             output_format = form.format.data
+            logger.info(
+                f"Generating investor reports for user {current_user.id}, format: {output_format}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if output_format == 'pdf':
                 return generate_investor_reports_pdf(reports)
             elif output_format == 'csv':
                 return generate_investor_reports_csv(reports)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating investor reports for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating investor reports for user {current_user.id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Error generating investor reports for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
     else:
         try:
             db = utils.get_mongo_db()
             reports = [to_dict_investor_report(r) for r in db.investor_reports.find(query).sort('created_at', -1)]
-        except Exception as e:
-            logger.error(f"Error fetching investor reports for user {current_user.id}: {str(e)}", exc_info=True)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error fetching investor reports for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+        except Exception as e:
+            logger.error(
+                f"Error fetching investor reports for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred'), 'danger')
+    logger.info(
+        f"Rendering investor reports page for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template(
         'reports/investor_reports.html',
         form=form,
         reports=reports,
-        title=utils.trans('reports_investor_reports', default='Investor Reports', lang=session.get('lang', 'en')),
+        title=trans('reports_investor_reports', default='Investor Reports', lang=session.get('lang', 'en')),
         can_interact=can_interact
     )
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in investor reports for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template(
+            'reports/investor_reports.html',
+            form=form,
+            reports=reports,
+            title=trans('reports_investor_reports', default='Investor Reports', lang=session.get('lang', 'en')),
+            can_interact=can_interact
+        ), 400
 
 @reports_bp.route('/admin/customer-reports', methods=['GET', 'POST'])
 @login_required
 @utils.requires_role('admin')
+@utils.limiter.limit('10 per minute')
 def customer_reports():
     form = CustomerReportForm()
-    can_interact = utils.can_user_interact(current_user)  # Should always be True for admins due to role check
+    can_interact = utils.can_user_interact(current_user)  # Should always be True for admins
     if form.validate_on_submit():
-        role = form.role.data if form.role.data else None
-        report_format = form.format.data
         try:
+            role = utils.sanitize_input(form.role.data, max_length=20) if form.role.data else None
+            report_format = form.format.data
+            if report_format not in ['html', 'pdf', 'csv']:
+                logger.error(
+                    f"Invalid format {report_format} for customer reports by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_format', default='Invalid report format'), 'danger')
+                return redirect(url_for('reports.customer_reports'))
+            if role and role not in ['', 'trader', 'startup', 'admin']:
+                logger.error(
+                    f"Invalid role {role} for customer reports by user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
+                flash(trans('reports_invalid_role', default='Invalid role selected'), 'danger')
+                return redirect(url_for('reports.customer_reports'))
             db = utils.get_mongo_db()
             pipeline = [
                 {'$match': {'role': role}} if role else {},
@@ -414,9 +775,9 @@ def customer_reports():
                 latest_fund = to_dict_fund(user['latest_fund'][0] if user['latest_fund'] else None)
                 latest_forecast = to_dict_forecast(user['latest_forecast'][0] if user['latest_forecast'] else None)
                 data = {
-                    'username': user['_id'],
-                    'email': user.get('email', ''),
-                    'role': user.get('role', ''),
+                    'username': utils.sanitize_input(str(user['_id']), max_length=100),
+                    'email': utils.sanitize_input(user.get('email', ''), max_length=100),
+                    'role': utils.sanitize_input(user.get('role', ''), max_length=20),
                     'is_trial': user.get('is_trial', False),
                     'trial_end': utils.format_date(user.get('trial_end')) if user.get('trial_end') else '-',
                     'is_subscribed': user.get('is_subscribed', False),
@@ -428,16 +789,42 @@ def customer_reports():
                     'latest_forecast_revenue': latest_forecast['projected_revenue'] if latest_forecast['projected_revenue'] is not None else '-'
                 }
                 report_data.append(data)
+            logger.info(
+                f"Generating customer report for user {current_user.id}, format: {report_format}, role: {role or 'all'}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             if report_format == 'html':
                 return render_template('reports/customer_reports.html', report_data=report_data, title='Customer Reports', can_interact=can_interact)
             elif report_format == 'pdf':
                 return generate_customer_report_pdf(report_data)
             elif report_format == 'csv':
                 return generate_customer_report_csv(report_data)
+        except pymongo.errors.PyMongoError as e:
+            logger.error(
+                f"MongoDB error generating customer report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred while generating the report'), 'danger')
         except Exception as e:
-            logger.error(f"Error generating customer report: {str(e)}", exc_info=True)
-            flash('An error occurred while generating the report', 'danger')
+            logger.error(
+                f"Error generating customer report for user {current_user.id}: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('reports_generation_error', default='An error occurred while generating the report'), 'danger')
+    logger.info(
+        f"Rendering customer reports form for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return render_template('reports/customer_reports_form.html', form=form, title='Generate Customer Report', can_interact=can_interact)
+    try:
+        pass
+    except CSRFError as e:
+        logger.error(
+            f"CSRF error in customer reports for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('reports_csrf_error', default='Invalid CSRF token. Please try again.'), 'danger')
+        return render_template('reports/customer_reports_form.html', form=form, title='Generate Customer Report', can_interact=can_interact), 400
 
 def generate_profit_loss_pdf(cashflows):
     buffer = BytesIO()
@@ -462,7 +849,7 @@ def generate_profit_loss_pdf(cashflows):
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_profit_loss_report', default='Profit/Loss Report'))
-    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
+    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.now(timezone.utc))}")
     y = title_y - 0.6
     y = draw_table_headers(y)
 
@@ -479,7 +866,7 @@ def generate_profit_loss_pdf(cashflows):
             row_count = 0
 
         p.drawString(1 * inch, y * inch, utils.format_date(t['created_at']))
-        p.drawString(2.5 * inch, y * inch, t['party_name'])
+        p.drawString(2.5 * inch, y * inch, utils.sanitize_input(t['party_name'], max_length=100))
         p.drawString(4 * inch, y * inch, trans(t['type'], default=t['type']))
         p.drawString(5 * inch, y * inch, utils.format_currency(t['amount']))
         if t['type'] == 'receipt':
@@ -508,6 +895,10 @@ def generate_profit_loss_pdf(cashflows):
 
     p.save()
     buffer.seek(0)
+    logger.info(
+        f"Generated profit/loss PDF for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=profit_loss.pdf'})
 
 def generate_profit_loss_csv(cashflows):
@@ -517,7 +908,7 @@ def generate_profit_loss_csv(cashflows):
     total_income = 0
     total_expense = 0
     for t in cashflows:
-        output.append([utils.format_date(t['created_at']), t['party_name'], trans(t['type'], default=t['type']), utils.format_currency(t['amount'])])
+        output.append([utils.format_date(t['created_at']), utils.sanitize_input(t['party_name'], max_length=100), trans(t['type'], default=t['type']), utils.format_currency(t['amount'])])
         if t['type'] == 'receipt':
             total_income += t['amount']
         else:
@@ -529,6 +920,10 @@ def generate_profit_loss_csv(cashflows):
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
+    logger.info(
+        f"Generated profit/loss CSV for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=profit_loss.csv'})
 
 def generate_debtors_creditors_pdf(records):
@@ -555,7 +950,7 @@ def generate_debtors_creditors_pdf(records):
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_debtors_creditors_report', default='Debtors/Creditors Report'))
-    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
+    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.now(timezone.utc))}")
     y = title_y - 0.6
     y = draw_table_headers(y)
 
@@ -572,10 +967,10 @@ def generate_debtors_creditors_pdf(records):
             row_count = 0
 
         p.drawString(1 * inch, y * inch, utils.format_date(r['created_at']))
-        p.drawString(2.5 * inch, y * inch, r['name'])
+        p.drawString(2.5 * inch, y * inch, utils.sanitize_input(r['name'], max_length=100))
         p.drawString(4 * inch, y * inch, trans(r['type'], default=r['type']))
         p.drawString(5 * inch, y * inch, utils.format_currency(r['amount_owed']))
-        p.drawString(6.5 * inch, y * inch, r.get('description', '')[:20])
+        p.drawString(6.5 * inch, y * inch, utils.sanitize_input(r.get('description', ''), max_length=20))
         if r['type'] == 'debtor':
             total_debtors += r['amount_owed']
         else:
@@ -598,6 +993,10 @@ def generate_debtors_creditors_pdf(records):
 
     p.save()
     buffer.seek(0)
+    logger.info(
+        f"Generated debtors/creditors PDF for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=debtors_creditors.pdf'})
 
 def generate_debtors_creditors_csv(records):
@@ -607,7 +1006,7 @@ def generate_debtors_creditors_csv(records):
     total_debtors = 0
     total_creditors = 0
     for r in records:
-        output.append([utils.format_date(r['created_at']), r['name'], trans(r['type'], default=r['type']), utils.format_currency(r['amount_owed']), r.get('description', '')])
+        output.append([utils.format_date(r['created_at']), utils.sanitize_input(r['name'], max_length=100), trans(r['type'], default=r['type']), utils.format_currency(r['amount_owed']), utils.sanitize_input(r.get('description', ''), max_length=1000)])
         if r['type'] == 'debtor':
             total_debtors += r['amount_owed']
         else:
@@ -618,6 +1017,10 @@ def generate_debtors_creditors_csv(records):
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
+    logger.info(
+        f"Generated debtors/creditors CSV for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=debtors_creditors.csv'})
 
 def generate_funds_pdf(funds):
@@ -643,7 +1046,7 @@ def generate_funds_pdf(funds):
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_funds_report', default='Funds Report'))
-    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
+    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.now(timezone.utc))}")
     y = title_y - 0.6
     y = draw_table_headers(y)
 
@@ -659,7 +1062,7 @@ def generate_funds_pdf(funds):
             row_count = 0
 
         p.drawString(1 * inch, y * inch, utils.format_date(f['created_at']))
-        p.drawString(2.5 * inch, y * inch, f['source'])
+        p.drawString(2.5 * inch, y * inch, utils.sanitize_input(f['source'], max_length=100))
         p.drawString(4 * inch, y * inch, utils.format_currency(f['amount']))
         p.drawString(5 * inch, y * inch, trans(f['status'], default=f['status']))
         total_amount += f['amount']
@@ -677,6 +1080,10 @@ def generate_funds_pdf(funds):
 
     p.save()
     buffer.seek(0)
+    logger.info(
+        f"Generated funds PDF for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=funds.pdf'})
 
 def generate_funds_csv(funds):
@@ -685,13 +1092,17 @@ def generate_funds_csv(funds):
     output.append([trans('general_date', default='Date'), trans('funds_source', default='Source'), trans('general_amount', default='Amount'), trans('general_status', default='Status')])
     total_amount = 0
     for f in funds:
-        output.append([utils.format_date(f['created_at']), f['source'], utils.format_currency(f['amount']), trans(f['status'], default=f['status'])])
+        output.append([utils.format_date(f['created_at']), utils.sanitize_input(f['source'], max_length=100), utils.format_currency(f['amount']), trans(f['status'], default=f['status'])])
         total_amount += f['amount']
     output.append(['', '', f"{trans('reports_total_funds', default='Total Funds')}: {utils.format_currency(total_amount)}", ''])
     buffer = StringIO()
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
+    logger.info(
+        f"Generated funds CSV for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=funds.csv'})
 
 def generate_forecasts_pdf(forecasts):
@@ -718,7 +1129,7 @@ def generate_forecasts_pdf(forecasts):
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_forecasts_report', default='Forecasts Report'))
-    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
+    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.now(timezone.utc))}")
     y = title_y - 0.6
     y = draw_table_headers(y)
 
@@ -736,7 +1147,7 @@ def generate_forecasts_pdf(forecasts):
 
         period = f"{utils.format_date(f['period_start'])} - {utils.format_date(f['period_end'])}" if f['period_start'] and f['period_end'] else '-'
         p.drawString(1 * inch, y * inch, utils.format_date(f['created_at']))
-        p.drawString(2 * inch, y * inch, f['scenario'][:20])
+        p.drawString(2 * inch, y * inch, utils.sanitize_input(f['scenario'][:20], max_length=20))
         p.drawString(3.5 * inch, y * inch, utils.format_currency(f['projected_revenue']))
         p.drawString(4.5 * inch, y * inch, utils.format_currency(f['projected_expenses']))
         p.drawString(5.5 * inch, y * inch, period[:20])
@@ -760,6 +1171,10 @@ def generate_forecasts_pdf(forecasts):
 
     p.save()
     buffer.seek(0)
+    logger.info(
+        f"Generated forecasts PDF for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=forecasts.pdf'})
 
 def generate_forecasts_csv(forecasts):
@@ -778,7 +1193,7 @@ def generate_forecasts_csv(forecasts):
         period = f"{utils.format_date(f['period_start'])} - {utils.format_date(f['period_end'])}" if f['period_start'] and f['period_end'] else '-'
         output.append([
             utils.format_date(f['created_at']),
-            f['scenario'],
+            utils.sanitize_input(f['scenario'], max_length=100),
             utils.format_currency(f['projected_revenue']),
             utils.format_currency(f['projected_expenses']),
             period
@@ -790,6 +1205,10 @@ def generate_forecasts_csv(forecasts):
     writer = csv.writer(buffer, lineterminator='\n')
     writer.writerows(output)
     buffer.seek(0)
+    logger.info(
+        f"Generated forecasts CSV for user {current_user.id}",
+        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+    )
     return Response(buffer.getvalue(), mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=forecasts.csv'})
 
 def generate_investor_reports_pdf(reports):
@@ -814,7 +1233,7 @@ def generate_investor_reports_pdf(reports):
     draw_ficore_pdf_header(p, current_user, y_start=max_y)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, title_y * inch, trans('reports_investor_reports', default='Investor Reports'))
-    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.utcnow())}")
+    p.drawString(1 * inch, (title_y - 0.3) * inch, f"{trans('reports_generated_on', default='Generated on')}: {utils.format_date(datetime.now(timezone.utc))}")
     y = title_y - 0.6
     y = draw_table_headers(y)
 
