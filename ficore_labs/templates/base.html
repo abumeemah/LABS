@@ -169,13 +169,11 @@
     </main>
 
     {% if current_user.is_authenticated %}
-        {{ log_user_action('debug_bottom_nav', {'role': current_user.role, 'nav_items_count': (ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV) | length, 'TRADER_NAV_count': TRADER_NAV | length, 'STARTUP_NAV_count': STARTUP_NAV | length, 'ADMIN_NAV_count': ADMIN_NAV | length}) }}
         <nav class="bottom-nav d-md-none" role="navigation" aria-label="{{ t('general_mobile_navigation', default='Mobile navigation') | e }}">
             <div class="nav-container">
                 {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
                 {% if not nav_items %}
                     {% set nav_items = TRADER_NAV %}
-                    {{ log_user_action('debug_nav_fallback', {'role': current_user.role, 'message': 'Navigation list empty, using TRADER_NAV'}) }}
                 {% endif %}
                 {% for item in nav_items %}
                     <a href="{{ item.url | e }}" class="nav-item {% if request.endpoint == item.endpoint %}active{% endif %}" aria-label="{{ t(item.label_key, default=item.label) | e }}">
