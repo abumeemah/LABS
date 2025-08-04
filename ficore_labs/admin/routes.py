@@ -1,5 +1,5 @@
 import logging
-from bson import ObjectId
+from bson import ObjectId, errors
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, Response
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
@@ -7,7 +7,8 @@ from wtforms import StringField, FloatField, SelectField, SubmitField, DateField
 from wtforms.validators import DataRequired, NumberRange, ValidationError
 from translations import trans
 import utils
-import datetime
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo  # Added ZoneInfo import
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -73,10 +74,10 @@ def log_audit_action(action, details=None):
             'admin_id': str(current_user.id),
             'action': action,
             'details': details or {},
-            'timestamp': datetime.datetime.utcnow()
+            'timestamp': datetime.now(timezone.utc)  # Updated to timezone-aware
         })
     except Exception as e:
-        logger.error(f"Error logging audit action: {str(e)}",
+        logger.error(f"Error logging audit action '{action}': {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
 
 # Routes
@@ -101,8 +102,16 @@ def dashboard():
         recent_users = list(db.users.find().sort('created_at', -1).limit(5))
         for user in recent_users:
             user['_id'] = str(user['_id'])
-            user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
-        logger.info(f"Admin {current_user.id} accessed dashboard at {datetime.datetime.utcnow()}",
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+            # Convert naive datetimes to timezone-aware
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
+                else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+            )
+        logger.info(f"Admin {current_user.id} accessed dashboard",
                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         return render_template(
             'admin/dashboard.html',
@@ -111,7 +120,7 @@ def dashboard():
             title=trans('admin_dashboard', default='Admin Dashboard')
         )
     except Exception as e:
-        logger.error(f"Error loading admin dashboard for {current_user.id}: {str(e)}",
+        logger.error(f"Error loading admin dashboard for user {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_dashboard_error', default='An error occurred while loading the dashboard'), 'danger')
         return redirect(url_for('error/500.html'))
@@ -128,10 +137,18 @@ def manage_users():
         for user in users:
             user['_id'] = str(user['_id'])
             user['username'] = user['_id']
-            user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+            # Convert naive datetimes to timezone-aware
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
+                else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+            )
         return render_template('admin/users.html', users=users, title=trans('admin_manage_users_title', default='Manage Users'))
     except Exception as e:
-        logger.error(f"Error fetching users for admin: {str(e)}",
+        logger.error(f"Error fetching users for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('admin/users.html', users=[]), 500
@@ -143,15 +160,16 @@ def manage_users():
 def suspend_user(user_id):
     """Suspend a user account."""
     try:
+        ObjectId(user_id)  # Validate user_id format
         db = utils.get_mongo_db()
-        user_query = utils.get_user_query(user_id)
+        user_query = {'_id': user_id}
         user = db.users.find_one(user_query)
         if not user:
             flash(trans('admin_user_not_found', default='User not found'), 'danger')
             return redirect(url_for('admin.manage_users'))
         result = db.users.update_one(
             user_query,
-            {'$set': {'suspended': True, 'updated_at': datetime.datetime.utcnow()}}
+            {'$set': {'suspended': True, 'updated_at': datetime.now(timezone.utc)}}  # Updated to timezone-aware
         )
         if result.modified_count == 0:
             flash(trans('admin_user_not_updated', default='User could not be suspended'), 'danger')
@@ -160,6 +178,11 @@ def suspend_user(user_id):
             logger.info(f"Admin {current_user.id} suspended user {user_id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action('suspend_user', {'user_id': user_id})
+        return redirect(url_for('admin.manage_users'))
+    except errors.InvalidId:
+        logger.error(f"Invalid user_id format: {user_id}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
         return redirect(url_for('admin.manage_users'))
     except Exception as e:
         logger.error(f"Error suspending user {user_id}: {str(e)}",
@@ -174,8 +197,9 @@ def suspend_user(user_id):
 def delete_user(user_id):
     """Delete a user and their data."""
     try:
+        ObjectId(user_id)  # Validate user_id format
         db = utils.get_mongo_db()
-        user_query = utils.get_user_query(user_id)
+        user_query = {'_id': user_id}
         user = db.users.find_one(user_query)
         if not user:
             flash(trans('admin_user_not_found', default='User not found'), 'danger')
@@ -196,6 +220,11 @@ def delete_user(user_id):
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action('delete_user', {'user_id': user_id})
         return redirect(url_for('admin.manage_users'))
+    except errors.InvalidId:
+        logger.error(f"Invalid user_id format: {user_id}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
+        return redirect(url_for('admin.manage_users'))
     except Exception as e:
         logger.error(f"Error deleting user {user_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
@@ -213,6 +242,7 @@ def delete_item(collection, item_id):
         flash(trans('admin_invalid_collection', default='Invalid collection selected'), 'danger')
         return redirect(url_for('admin.dashboard'))
     try:
+        ObjectId(item_id)  # Validate item_id format
         db = utils.get_mongo_db()
         result = db[collection].delete_one({'_id': ObjectId(item_id)})
         if result.deleted_count == 0:
@@ -223,6 +253,11 @@ def delete_item(collection, item_id):
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action(f'delete_{collection}_item', {'item_id': item_id, 'collection': collection})
         return redirect(url_for(f'admin.{collection}'))
+    except errors.InvalidId:
+        logger.error(f"Invalid item_id format for collection {collection}: {item_id}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_invalid_item_id', default='Invalid item ID'), 'danger')
+        return redirect(url_for('admin.dashboard'))
     except Exception as e:
         logger.error(f"Error deleting {collection} item {item_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
@@ -240,10 +275,8 @@ def manage_user_roles():
     form = RoleForm()
     if request.method == 'POST' and form.validate_on_submit():
         user_id = request.form.get('user_id')
-        if not user_id:
-            flash(trans('user_id_required', default='User ID is required'), 'danger')
-            return redirect(url_for('admin.manage_user_roles'))
         try:
+            ObjectId(user_id)  # Validate user_id format
             user = db.users.find_one({'_id': user_id})
             if not user:
                 flash(trans('user_not_found', default='User not found'), 'danger')
@@ -251,12 +284,17 @@ def manage_user_roles():
             new_role = form.role.data
             db.users.update_one(
                 {'_id': user_id},
-                {'$set': {'role': new_role, 'updated_at': datetime.datetime.utcnow()}}
+                {'$set': {'role': new_role, 'updated_at': datetime.now(timezone.utc)}}  # Updated to timezone-aware
             )
-            logger.info(f"User role updated: id={user_id}, new_role={new_role}, user={current_user.id}",
+            logger.info(f"User role updated: id={user_id}, new_role={new_role}, admin={current_user.id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action('update_user_role', {'user_id': user_id, 'new_role': new_role})
             flash(trans('user_role_updated', default='User role updated successfully'), 'success')
+            return redirect(url_for('admin.manage_user_roles'))
+        except errors.InvalidId:
+            logger.error(f"Invalid user_id format: {user_id}",
+                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
             return redirect(url_for('admin.manage_user_roles'))
         except Exception as e:
             logger.error(f"Error updating user role {user_id}: {str(e)}",
@@ -266,7 +304,15 @@ def manage_user_roles():
     
     for user in users:
         user['_id'] = str(user['_id'])
-        user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
+        trial_end = user.get('trial_end')
+        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+        # Convert naive datetimes to timezone-aware
+        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+        user['is_trial_active'] = (
+            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
+            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+        )
     return render_template('admin/user_roles.html', form=form, users=users, title=trans('admin_manage_user_roles_title', default='Manage User Roles'))
 
 @admin_bp.route('/users/subscriptions', methods=['GET', 'POST'])
@@ -280,32 +326,36 @@ def manage_user_subscriptions():
     form = SubscriptionForm()
     if request.method == 'POST' and form.validate_on_submit():
         user_id = request.form.get('user_id')
-        if not user_id:
-            flash(trans('user_id_required', default='User ID is required'), 'danger')
-            return redirect(url_for('admin.manage_user_subscriptions'))
         try:
+            ObjectId(user_id)  # Validate user_id format
             user = db.users.find_one({'_id': user_id})
             if not user:
                 flash(trans('user_not_found', default='User not found'), 'danger')
                 return redirect(url_for('admin.manage_user_subscriptions'))
+            plan_durations = {'monthly': 30, 'yearly': 365}
             update_data = {
                 'is_subscribed': form.is_subscribed.data == 'True',
                 'subscription_plan': form.subscription_plan.data or None,
-                'subscription_start': datetime.datetime.utcnow() if form.is_subscribed.data == 'True' else None,
+                'subscription_start': datetime.now(timezone.utc) if form.is_subscribed.data == 'True' else None,  # Updated to timezone-aware
                 'subscription_end': form.subscription_end.data if form.subscription_end.data else None,
-                'updated_at': datetime.datetime.utcnow()
+                'updated_at': datetime.now(timezone.utc)  # Updated to timezone-aware
             }
-            if form.is_subscribed.data == 'True' and not form.subscription_end.data:
-                duration = 365 if form.subscription_plan.data == 'yearly' else 30
-                update_data['subscription_end'] = datetime.datetime.utcnow() + datetime.timedelta(days=duration)
+            if form.is_subscribed.data == 'True' and not form.subscription_end.data and form.subscription_plan.data:
+                duration = plan_durations.get(form.subscription_plan.data, 30)
+                update_data['subscription_end'] = datetime.now(timezone.utc) + timedelta(days=duration)
             db.users.update_one(
                 {'_id': user_id},
                 {'$set': update_data}
             )
-            logger.info(f"User subscription updated: id={user_id}, subscribed={update_data['is_subscribed']}, plan={update_data['subscription_plan']}, user={current_user.id}",
+            logger.info(f"User subscription updated: id={user_id}, subscribed={update_data['is_subscribed']}, plan={update_data['subscription_plan']}, admin={current_user.id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
             log_audit_action('update_user_subscription', {'user_id': user_id, 'is_subscribed': update_data['is_subscribed'], 'subscription_plan': update_data['subscription_plan']})
             flash(trans('subscription_updated', default='User subscription updated successfully'), 'success')
+            return redirect(url_for('admin.manage_user_subscriptions'))
+        except errors.InvalidId:
+            logger.error(f"Invalid user_id format: {user_id}",
+                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+            flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
             return redirect(url_for('admin.manage_user_subscriptions'))
         except Exception as e:
             logger.error(f"Error updating user subscription {user_id}: {str(e)}",
@@ -315,7 +365,15 @@ def manage_user_subscriptions():
     
     for user in users:
         user['_id'] = str(user['_id'])
-        user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
+        trial_end = user.get('trial_end')
+        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+        # Convert naive datetimes to timezone-aware
+        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+        user['is_trial_active'] = (
+            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
+            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+        )
     return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
 
 @admin_bp.route('/audit', methods=['GET'])
@@ -351,12 +409,18 @@ def manage_feedback():
             if form.tool_name.data:
                 filter_kwargs['tool_name'] = form.tool_name.data
             if form.user_id.data:
-                filter_kwargs['user_id'] = form.user_id.data
+                filter_kwargs['user_id'] = utils.sanitize_input(form.user_id.data, max_length=50)
         
         feedback_list = [to_dict_feedback(fb) for fb in get_feedback(db, filter_kwargs)]
         for feedback in feedback_list:
             feedback['id'] = str(feedback['id'])
-            feedback['timestamp'] = feedback['timestamp'].strftime('%Y-%m-%d %H:%M:%S') if feedback['timestamp'] else ''
+            feedback['timestamp'] = (
+                feedback['timestamp'].astimezone(ZoneInfo("UTC")).strftime('%Y-%m-%d %H:%M:%S')
+                if feedback['timestamp'] and feedback['timestamp'].tzinfo
+                else feedback['timestamp'].replace(tzinfo=ZoneInfo("UTC")).strftime('%Y-%m-%d %H:%M:%S')
+                if feedback['timestamp']
+                else ''
+            )
         
         return render_template(
             'admin/feedback.html',
@@ -381,17 +445,17 @@ def manage_debtors():
     if request.method == 'POST' and form.validate_on_submit():
         try:
             debtor = {
-                'name': form.name.data,
-                'amount': form.amount.data,
+                'name': utils.sanitize_input(form.name.data, max_length=100),
+                'amount': utils.clean_currency(form.amount.data),
                 'due_date': form.due_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
+                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
             }
             result = db.debtors.insert_one(debtor)
             debtor_id = str(result.inserted_id)
-            logger.info(f"Debtor added: id={debtor_id}, name={form.name.data}, user={current_user.id}",
+            logger.info(f"Debtor added: id={debtor_id}, name={debtor['name']}, admin={current_user.id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_debtor', {'debtor_id': debtor_id, 'name': form.name.data})
+            log_audit_action('add_debtor', {'debtor_id': debtor_id, 'name': debtor['name']})
             flash(trans('debtor_added', default='Debtor added successfully'), 'success')
             return redirect(url_for('admin.manage_debtors'))
         except Exception as e:
@@ -416,17 +480,17 @@ def manage_creditors():
     if request.method == 'POST' and form.validate_on_submit():
         try:
             creditor = {
-                'name': form.name.data,
-                'amount': form.amount.data,
+                'name': utils.sanitize_input(form.name.data, max_length=100),
+                'amount': utils.clean_currency(form.amount.data),
                 'due_date': form.due_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
+                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
             }
             result = db.creditors.insert_one(creditor)
             creditor_id = str(result.inserted_id)
-            logger.info(f"Creditor added: id={creditor_id}, name={form.name.data}, user={current_user.id}",
+            logger.info(f"Creditor added: id={creditor_id}, name={creditor['name']}, admin={current_user.id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_creditor', {'creditor_id': creditor_id, 'name': form.name.data})
+            log_audit_action('add_creditor', {'creditor_id': creditor_id, 'name': creditor['name']})
             flash(trans('creditor_added', default='Creditor added successfully'), 'success')
             return redirect(url_for('admin.manage_creditors'))
         except Exception as e:
@@ -453,7 +517,7 @@ def manage_records():
             record['_id'] = str(record['_id'])
         return render_template('admin/records.html', records=records, title=trans('admin_records_title', default='Manage Income Records'))
     except Exception as e:
-        logger.error(f"Error fetching records for admin: {str(e)}",
+        logger.error(f"Error fetching records for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('admin/records.html', records=[]), 500
@@ -471,7 +535,7 @@ def manage_cashflows():
             cashflow['_id'] = str(cashflow['_id'])
         return render_template('admin/cashflows.html', cashflows=cashflows, title=trans('admin_cashflows_title', default='Manage Payment Outflows'))
     except Exception as e:
-        logger.error(f"Error fetching cashflows for admin: {str(e)}",
+        logger.error(f"Error fetching cashflows for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('admin/cashflows.html', cashflows=[]), 500
@@ -487,17 +551,17 @@ def manage_funds():
     if request.method == 'POST' and form.validate_on_submit():
         try:
             fund = {
-                'source': form.source.data,
-                'amount': form.amount.data,
+                'source': utils.sanitize_input(form.source.data, max_length=100),
+                'amount': utils.clean_currency(form.amount.data),
                 'received_date': form.received_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.datetime.utcnow()
+                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
             }
             result = db.funds.insert_one(fund)
             fund_id = str(result.inserted_id)
-            logger.info(f"Fund added: id={fund_id}, source={form.source.data}, user={current_user.id}",
+            logger.info(f"Fund added: id={fund_id}, source={fund['source']}, admin={current_user.id}",
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('add_fund', {'fund_id': fund_id, 'source': form.source.data})
+            log_audit_action('add_fund', {'fund_id': fund_id, 'source': fund['source']})
             flash(trans('fund_added', default='Fund added successfully'), 'success')
             return redirect(url_for('admin.manage_funds'))
         except Exception as e:
@@ -540,7 +604,15 @@ def customer_reports():
     users = list(db.users.find())
     for user in users:
         user['_id'] = str(user['_id'])
-        user['is_trial_active'] = datetime.datetime.utcnow() <= user.get('trial_end') if user.get('is_trial') else user.get('is_subscribed') and datetime.datetime.utcnow() <= user.get('subscription_end', datetime.datetime.utcnow())
+        trial_end = user.get('trial_end')
+        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+        # Convert naive datetimes to timezone-aware
+        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+        user['is_trial_active'] = (
+            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
+            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+        )
     
     if format == 'pdf':
         return generate_customer_report_pdf(users)
@@ -564,10 +636,10 @@ def investor_reports():
     creditors = list(db.creditors.find())
     total_creditors = sum(creditor['amount'] for creditor in creditors)
     report_data = {
-        'total_funds': total_funds,
-        'total_debtors': total_debtors,
-        'total_creditors': total_creditors,
-        'net_position': total_funds - total_creditors
+        'total_funds': utils.format_currency(total_funds),
+        'total_debtors': utils.format_currency(total_debtors),
+        'total_creditors': utils.format_currency(total_creditors),
+        'net_position': utils.format_currency(total_funds - total_creditors)
     }
     if format == 'pdf':
         return generate_investor_report_pdf(report_data)
@@ -589,15 +661,15 @@ def manage_forecasts():
         total_income = sum(record['amount'] for record in records if record['type'] == 'income')
         total_expenses = sum(cashflow['amount'] for cashflow in cashflows if cashflow['type'] == 'expense')
         forecast = {
-            'total_income': total_income,
-            'total_expenses': total_expenses,
-            'net_cashflow': total_income - total_expenses,
-            'projected_income': total_income * 1.1,  # Simple 10% growth assumption
-            'projected_expenses': total_expenses * 1.1
+            'total_income': utils.format_currency(total_income),
+            'total_expenses': utils.format_currency(total_expenses),
+            'net_cashflow': utils.format_currency(total_income - total_expenses),
+            'projected_income': utils.format_currency(total_income * 1.1),  # Simple 10% growth assumption
+            'projected_expenses': utils.format_currency(total_expenses * 1.1)
         }
         return render_template('admin/forecasts.html', forecast=forecast, title=trans('admin_forecasts_title', default='Financial Forecasts'))
     except Exception as e:
-        logger.error(f"Error generating forecasts for admin: {str(e)}",
+        logger.error(f"Error generating forecasts for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('admin/forecasts.html', forecast={}), 500
@@ -608,7 +680,7 @@ def generate_customer_report_pdf(users):
     p = canvas.Canvas(buffer, pagesize=A4)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, 10.5 * inch, trans('admin_customer_report_title', default='Customer Report'))
-    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.datetime.utcnow().strftime('%Y-%m-%d')}")
+    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")  # Updated to timezone-aware
     y = 9.5 * inch
     p.drawString(1 * inch, y, trans('admin_username', default='Username'))
     p.drawString(2.5 * inch, y, trans('admin_email', default='Email'))
@@ -648,19 +720,19 @@ def generate_investor_report_pdf(report_data):
     p = canvas.Canvas(buffer, pagesize=A4)
     p.setFont("Helvetica", 12)
     p.drawString(1 * inch, 10.5 * inch, trans('admin_investor_report_title', default='Investor Report'))
-    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.datetime.utcnow().strftime('%Y-%m-%d')}")
+    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")  # Updated to timezone-aware
     y = 9.5 * inch
     p.drawString(1 * inch, y, trans('fund_total', default='Total Funds'))
-    p.drawString(3 * inch, y, f"₦{report_data['total_funds']:.2f}")
+    p.drawString(3 * inch, y, report_data['total_funds'])
     y -= 0.3 * inch
     p.drawString(1 * inch, y, trans('debtor_total', default='Total Debtors'))
-    p.drawString(3 * inch, y, f"₦{report_data['total_debtors']:.2f}")
+    p.drawString(3 * inch, y, report_data['total_debtors'])
     y -= 0.3 * inch
     p.drawString(1 * inch, y, trans('creditor_total', default='Total Creditors'))
-    p.drawString(3 * inch, y, f"₦{report_data['total_creditors']:.2f}")
+    p.drawString(3 * inch, y, report_data['total_creditors'])
     y -= 0.3 * inch
     p.drawString(1 * inch, y, trans('net_position', default='Net Position'))
-    p.drawString(3 * inch, y, f"₦{report_data['net_position']:.2f}")
+    p.drawString(3 * inch, y, report_data['net_position'])
     p.showPage()
     p.save()
     buffer.seek(0)
@@ -669,10 +741,10 @@ def generate_investor_report_pdf(report_data):
 def generate_investor_report_csv(report_data):
     """Generate a CSV report for investors."""
     output = [
-        [trans('fund_total', default='Total Funds'), f"₦{report_data['total_funds']:.2f}"],
-        [trans('debtor_total', default='Total Debtors'), f"₦{report_data['total_debtors']:.2f}"],
-        [trans('creditor_total', default='Total Creditors'), f"₦{report_data['total_creditors']:.2f}"],
-        [trans('net_position', default='Net Position'), f"₦{report_data['net_position']:.2f}"]
+        [trans('fund_total', default='Total Funds'), report_data['total_funds']],
+        [trans('debtor_total', default='Total Debtors'), report_data['total_debtors']],
+        [trans('creditor_total', default='Total Creditors'), report_data['total_creditors']],
+        [trans('net_position', default='Net Position'), report_data['net_position']]
     ]
     buffer = BytesIO()
     writer = csv.writer(buffer, lineterminator='\n')
