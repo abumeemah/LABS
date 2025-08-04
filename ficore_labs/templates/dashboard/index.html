@@ -48,7 +48,7 @@
                                 <span class="h5 text-primary">{{ stats.total_debtors }}</span><br>
                                 <small class="text-muted">{{ stats.total_debtors_amount | format_currency }}</small>
                             </p>
-                            <a href="{{ url_for('debtors.view') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
+                            <a href="{{ url_for('debtors.view_all') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
                         </div>
                     </div>
                 </div>
@@ -585,9 +585,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('creditorModalDate').textContent = currentData.date;
 
             // Update action buttons
-            document.getElementById('creditorViewBtn').href = `/creditors/view/${currentData._id}`;
-            document.getElementById('creditorEditBtn').href = `/creditors/edit/${currentData._id}`;
-            document.getElementById('creditorDeleteForm').action = `/creditors/delete/${currentData._id}`;
+            document.getElementById('creditorViewBtn').href = `{{ url_for('creditors.view', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('creditorEditBtn').href = `{{ url_for('creditors.edit', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('creditorDeleteForm').action = `{{ url_for('creditors.delete', id='_id_') }}`.replace('_id_', currentData._id);
         });
     });
 
@@ -612,11 +612,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('debtorModalDescription').textContent = currentData.description || '-';
             document.getElementById('debtorModalDate').textContent = currentData.date;
             document.getElementById('debtorModalReminders').textContent = currentData.reminders;
-            
+
             // Update action buttons
-            document.getElementById('debtorViewBtn').href = `/debtors/view/${currentData._id}`;
-            document.getElementById('debtorEditBtn').href = `/debtors/edit/${currentData._id}`;
-            document.getElementById('debtorDeleteForm').action = `/debtors/delete/${currentData._id}`;
+            document.getElementById('debtorViewBtn').href = `{{ url_for('debtors.view', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('debtorEditBtn').href = `{{ url_for('debtors.edit', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('debtorDeleteForm').action = `{{ url_for('debtors.delete', id='_id_') }}`.replace('_id_', currentData._id);
         });
     });
 
@@ -639,9 +639,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('paymentModalDate').textContent = currentData.date;
 
             // Update action buttons
-            document.getElementById('paymentViewBtn').href = `/payments/view/${currentData._id}`;
-            document.getElementById('paymentEditBtn').href = `/payments/edit/${currentData._id}`;
-            document.getElementById('paymentDeleteForm').action = `/payments/delete/${currentData._id}`;
+            document.getElementById('paymentViewBtn').href = `{{ url_for('payments.view', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('paymentEditBtn').href = `{{ url_for('payments.edit', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('paymentDeleteForm').action = `{{ url_for('payments.delete', id='_id_') }}`.replace('_id_', currentData._id);
         });
     });
 
@@ -664,9 +664,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('receiptModalDate').textContent = currentData.date;
 
             // Update action buttons
-            document.getElementById('receiptViewBtn').href = `/receipts/view/${currentData._id}`;
-            document.getElementById('receiptEditBtn').href = `/receipts/edit/${currentData._id}`;
-            document.getElementById('receiptDeleteForm').action = `/receipts/delete/${currentData._id}`;
+            document.getElementById('receiptViewBtn').href = `{{ url_for('receipts.view', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('receiptEditBtn').href = `{{ url_for('receipts.edit', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('receiptDeleteForm').action = `{{ url_for('receipts.delete', id='_id_') }}`.replace('_id_', currentData._id);
         });
     });
 
@@ -689,9 +689,9 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('fundModalDate').textContent = currentData.date;
 
             // Update action buttons
-            document.getElementById('fundViewBtn').href = `/funds/view/${currentData._id}`;
-            document.getElementById('fundEditBtn').href = `/funds/edit/${currentData._id}`;
-            document.getElementById('fundDeleteForm').action = `/funds/delete/${currentData._id}`;
+            document.getElementById('fundViewBtn').href = `{{ url_for('funds.view', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('fundEditBtn').href = `{{ url_for('funds.edit', id='_id_') }}`.replace('_id_', currentData._id);
+            document.getElementById('fundDeleteForm').action = `{{ url_for('funds.delete', id='_id_') }}`.replace('_id_', currentData._id);
         });
     });
 });
