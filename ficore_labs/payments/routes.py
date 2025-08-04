@@ -35,7 +35,7 @@ payments_bp = Blueprint('payments', __name__, url_prefix='/payments')
 
 @payments_bp.route('/')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def index():
     """List all payment cashflows for the current user."""
     try:
@@ -66,7 +66,7 @@ def index():
 
 @payments_bp.route('/manage')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def manage():
     """Manage all payment cashflows for the current user (edit/delete)."""
     try:
@@ -97,7 +97,7 @@ def manage():
 
 @payments_bp.route('/view/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def view(id):
     """View detailed information about a specific payment."""
     try:
@@ -129,7 +129,7 @@ def view(id):
 
 @payments_bp.route('/generate_pdf/<id>')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def generate_pdf(id):
     """Generate PDF receipt for a payment transaction."""
     try:
@@ -207,7 +207,7 @@ def generate_pdf(id):
 
 @payments_bp.route('/add', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def add():
     """Add a new payment cashflow."""
@@ -267,7 +267,7 @@ def add():
 
 @payments_bp.route('/edit/<id>', methods=['GET', 'POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def edit(id):
     """Edit an existing payment cashflow."""
@@ -363,7 +363,7 @@ def edit(id):
 
 @payments_bp.route('/delete/<id>', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def delete(id):
     """Delete a payment cashflow."""
@@ -412,7 +412,7 @@ def delete(id):
 
 @payments_bp.route('/share', methods=['POST'])
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 @utils.limiter.limit('10 per minute')
 def share():
     """Share a payment receipt via SMS or WhatsApp."""
