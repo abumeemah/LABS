@@ -177,9 +177,9 @@ def get_post_login_redirect(user_role):
         if user_role == 'trader':
             return url_for('general_bp.home')
         elif user_role == 'startup':
-            return url_for('dashboard.index')
+            return url_for('general_bp.home')
         elif user_role == 'admin':
-            return url_for('admin.dashboard')
+            return url_for('general_bp.home')
         else:
             logger.error(f"Invalid role '{user_role}' for login redirect")
             raise ValueError(f"Invalid role: {user_role}")
