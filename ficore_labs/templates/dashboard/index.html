@@ -100,7 +100,15 @@
                 {% endif %}
                 {% if current_user.role in ['startup', 'admin'] %}
                     <a href="{{ url_for('reports.customer_reports') }}" class="btn btn-primary">{{ trans('reports_customer', default='Customer Reports') | escape }}</a>
-                    <a href="{{ url_for('reports.investor_reports') }}" class="btn btn-primary">{{ trans('reports_investor', default='Investor Reports') | escape }}</a>
+                    <a href="{{ url_for('reports.investor_reports') }}" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ trans('investor_reports_tooltip', default='View investor reports') | escape }}">
+                        <i class="bi bi-file-earmark-bar-graph me-1"></i>{{ trans('investor_reports_dashboard', default='Investor Reports') | escape }}
+                    </a>
+                    <a href="{{ url_for('reports.index') }}" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ trans('business_reports_tooltip', default='View business reports') | escape }}">
+                        <i class="bi bi-journal-minus me-1"></i>{{ trans('business_reports', default='Reports') | escape }}
+                    </a>
+                    <a href="{{ url_for('forecasts.index') }}" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ trans('forecasts_tooltip', default='View forecasts') | escape }}">
+                        <i class="bi bi-graph-up me-1"></i>{{ trans('forecasts_dashboard', default='Forecasts') | escape }}
+                    </a>
                 {% endif %}
             </div>
         </div>
@@ -608,6 +616,12 @@
                     deleteForm.action = `/${blueprint}/delete/${id}`;
                 }
             });
+        });
+
+        // Enable Bootstrap tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+            new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
 </script>
