@@ -66,9 +66,10 @@ def index():
             'total_payments': db.cashflows.count_documents({**query, 'type': 'payment'}),
             'total_receipts': db.cashflows.count_documents({**query, 'type': 'receipt'}),
             'total_funds': db.funds.count_documents(query),
-            'total_debtors_amount': sum(doc['amount_owed'] for doc in db.records.find({**query, 'type': 'debtor'}) if 'amount_owed' in doc),
-            'total_creditors_amount': sum(doc['amount_owed'] for doc in db.records.find({**query, 'type': 'creditor'}) if 'amount_owed' in doc),
-            'total_funds_amount': sum(doc['amount'] for doc in db.funds.find(query) if 'amount' in doc)
+            'total_debtors_amount': sum(doc.get('amount_owed', 0) for doc in db.records.find({**query, 'type': 'debtor'})),
+            'total_creditors_amount': sum(doc.get('amount_owed', 0) for doc in db.records.find({**query, 'type': 'creditor'})),
+            'total_receipts_amount': sum(doc.get('amount', 0) for doc in db.cashflows.find({**query, 'type': 'receipt'})),
+            'total_funds_amount': sum(doc.get('amount', 0) for doc in db.funds.find(query))
         }
 
         # Check subscription status using utility function
