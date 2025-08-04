@@ -75,7 +75,7 @@
                 </button>
                 <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
                     <ul class="navbar-nav">
-                        {% for item in TRADER_NAV %}
+                        {% for item in navigation %}
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == item.endpoint %}active{% endif %}" href="{{ item.url | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t(item.tooltip_key, default=item.label) | e }}" aria-current="{% if request.endpoint == item.endpoint %}page{% endif %}">
                                     <i class="bi {{ item.icon | default('bi-question-circle') | e }} me-2"></i>{{ t(item.label_key, default=item.label) | e }}
@@ -105,8 +105,7 @@
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav">
-                        {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
-                        {% for item in nav_items %}
+                        {% for item in navigation %}
                             <li class="nav-item">
                                 <a class="nav-link {% if request.endpoint == item.endpoint %}active{% endif %}" href="{{ item.url | e }}" data-bs-toggle="tooltip" data-bs-title="{{ t(item.tooltip_key, default=item.label) | e }}" aria-current="{% if request.endpoint == item.endpoint %}page{% endif %}">
                                     <i class="bi {{ item.icon | default('bi-question-circle') | e }} me-2"></i>{{ t(item.label_key, default=item.label) | e }}
@@ -171,11 +170,7 @@
     {% if current_user.is_authenticated %}
         <nav class="bottom-nav d-md-none" role="navigation" aria-label="{{ t('general_mobile_navigation', default='Mobile navigation') | e }}">
             <div class="nav-container">
-                {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
-                {% if not nav_items %}
-                    {% set nav_items = TRADER_NAV %}
-                {% endif %}
-                {% for item in nav_items %}
+                {% for item in navigation %}
                     <a href="{{ item.url | e }}" class="nav-item {% if request.endpoint == item.endpoint %}active{% endif %}" aria-label="{{ t(item.label_key, default=item.label) | e }}">
                         <i class="bi {{ item.icon | default('bi-question-circle') | e }}"></i>
                         <div class="nav-label">{{ t(item.label_key, default=item.label) | e }}</div>
@@ -208,7 +203,7 @@
                     <div class="footer-links">
                         <a href="{{ url_for('general_bp.terms') | e }}">{{ t('general_terms_of_service', default='Terms of Service') | e }}</a>
                         <a href="{{ url_for('general_bp.privacy') | e }}">{{ t('general_privacy_policy', default='Privacy Policy') | e }}</a>
-                        <a href="ficoreafrica@gmail.com"><i class="bi bi-envelope-fill me-2" aria-hidden="true"></i> {{ t('general_contact_us', default='Contact Us') | e }}</a>
+                        <a href="mailto:ficoreafrica@gmail.com"><i class="bi bi-envelope-fill me-2" aria-hidden="true"></i> {{ t('general_contact_us', default='Contact Us') | e }}</a>
                         <a href="{{ url_for('general_bp.feedback') | e }}"><i class="bi bi-chat-fill me-2" aria-hidden="true"></i> {{ t('general_provide_feedback', default='Provide Feedback') | e }}</a>
                         <a href="{{ url_for('users.login') | e }}"><i class="bi bi-box-arrow-in-right me-2" aria-hidden="true"></i> {{ t('general_login', default='Login') | e }}</a>
                     </div>
