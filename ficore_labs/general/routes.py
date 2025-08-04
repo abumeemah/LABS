@@ -58,7 +58,7 @@ def landing():
 
 @general_bp.route('/home')
 @login_required
-@utils.requires_role(['trader', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])
 def home():
     """Trader homepage with trial/subscription check."""
     try:
@@ -304,3 +304,4 @@ def feedback():
     
     # Handle GET request
     return render_template('general/feedback.html', tool_options=tool_options, title=trans('general_feedback', lang=lang))
+
