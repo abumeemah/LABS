@@ -180,14 +180,6 @@ _TRADER_NAV = [
         "icon": "bi-person-plus"
     },    
     {
-        "endpoint": "dashboard.index",
-        "label": "Home",
-        "label_key": "general_business_home",
-        "description_key": "general_business_home_desc",
-        "tooltip_key": "general_business_home_tooltip",
-        "icon": "bi-house"
-    },
-    {
         "endpoint": "reports.index",
         "label": "Reports",
         "label_key": "business_reports",
@@ -198,14 +190,7 @@ _TRADER_NAV = [
 ]
 
 _STARTUP_NAV = [
-    {
-        "endpoint": "dashboard.index",
-        "label": "Home",
-        "label_key": "general_business_home",
-        "description_key": "general_business_home_desc",
-        "tooltip_key": "general_business_home_tooltip",
-        "icon": "bi-house"
-    },
+
     {
         "endpoint": "funds.index",
         "label": "Fund Tracking",
