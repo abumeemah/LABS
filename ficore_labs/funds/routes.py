@@ -27,9 +27,13 @@ class FundForm(FlaskForm):
     source = StringField(trans('funds_source', default='Funding Source'), validators=[DataRequired()])
     amount = FloatField(trans('funds_amount', default='Amount'), validators=[DataRequired(), non_negative])
     category = SelectField(trans('funds_category', default='Category'), 
-                          choices=[('equity', trans('funds_equity', default='Equity')), 
-                                  ('debt', trans('funds_debt', default='Debt')), 
-                                  ('grant', trans('funds_grant', default='Grant'))], 
+                          choices=[
+                              ('equity', trans('funds_equity', default='Equity')), 
+                              ('debt', trans('funds_debt', default='Debt')), 
+                              ('grant', trans('funds_grant', default='Grant')),
+                              ('personal', trans('funds_personal', default='Personal')),  # Added for traders
+                              ('other', trans('funds_other', default='Other'))  # Added for flexibility
+                          ], 
                           validators=[DataRequired()])
     description = TextAreaField(trans('general_description', default='Description'), validators=[Optional()])
     submit = SubmitField(trans('funds_add_fund', default='Add Fund'))
@@ -38,7 +42,7 @@ funds_bp = Blueprint('funds', __name__, url_prefix='/funds')
 
 @funds_bp.route('/')
 @login_required
-@utils.requires_role(['startup', 'admin'])
+@utils.requires_role(['trader', 'startup', 'admin'])  # Updated to allow traders
 def index():
     """List all fund records for the current user."""
     try:
@@ -46,7 +50,6 @@ def index():
         query = {'user_id': str(current_user.id), 'type': 'fund'}
         funds = list(db.records.find(query).sort('created_at', -1))
         
-        # Convert naive datetimes to timezone-aware
         for fund in funds:
             if fund.get('created_at') and fund['created_at'].tzinfo is None:
                 fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
@@ -74,7 +77,6 @@ def manage():
         query = {'user_id': str(current_user.id), 'type': 'fund'}
         funds = list(db.records.find(query).sort('created_at', -1))
         
-        # Convert naive datetimes to timezone-aware
         for fund in funds:
             if fund.get('created_at') and fund['created_at'].tzinfo is None:
                 fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
@@ -104,7 +106,6 @@ def view(id):
         if not fund:
             return jsonify({'error': trans('funds_record_not_found', default='Record not found')}), 404
         
-        # Convert naive datetimes to timezone-aware
         if fund.get('created_at') and fund['created_at'].tzinfo is None:
             fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
@@ -132,7 +133,6 @@ def view_page(id):
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
         
-        # Convert naive datetimes to timezone-aware
         if fund.get('created_at') and fund['created_at'].tzinfo is None:
             fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
@@ -171,11 +171,9 @@ def generate_report(id):
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
         
-        # Convert naive datetimes to timezone-aware
         if fund.get('created_at') and fund['created_at'].tzinfo is None:
             fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
-        # Sanitize inputs for PDF generation
         fund['source'] = utils.sanitize_input(fund['source'], max_length=100)
         fund['description'] = utils.sanitize_input(fund.get('description', 'No description provided'), max_length=500)
         category = trans(f'funds_{fund["category"]}', default=fund['category'].capitalize())
@@ -189,7 +187,7 @@ def generate_report(id):
         title_y = 10.5 - header_height - extra_space
         
         p.setFont("Helvetica-Bold", 24)
-        p.drawString(inch, title_y * inch, trans('funds_report_title', default='FiCore Records - Fund Report'))
+        p.drawString(inch, title_y * inch, trans('funds_summary_title', default='FiCore Records - Fund Summary'))  # Updated title
         
         p.setFont("Helvetica", 12)
         y_position = title_y - 0.5
@@ -204,7 +202,7 @@ def generate_report(id):
         p.drawString(inch, y_position * inch, f"{trans('funds_date_recorded', default='Date Recorded')}: {utils.format_date(fund['created_at'])}")
         
         p.setFont("Helvetica-Oblique", 10)
-        p.drawString(inch, inch, trans('funds_report_footer', default='This document serves as a fund report recorded on FiCore Records.'))
+        p.drawString(inch, inch, trans('funds_summary_footer', default='This document summarizes a fund recorded on FiCore Records.'))  # Updated footer
         
         p.showPage()
         p.save()
@@ -214,7 +212,7 @@ def generate_report(id):
             buffer.getvalue(),
             mimetype='application/pdf',
             headers={
-                'Content-Disposition': f'attachment; filename=FiCore_Fund_Report_{utils.sanitize_input(fund["source"], max_length=50)}.pdf'
+                'Content-Disposition': f'attachment; filename=FiCore_Fund_Summary_{utils.sanitize_input(fund["source"], max_length=50)}.pdf'  # Updated filename
             }
         )
         
@@ -245,18 +243,16 @@ def generate_report_csv(id):
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
         
-        # Convert naive datetimes to timezone-aware
         if fund.get('created_at') and fund['created_at'].tzinfo is None:
             fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
-        # Sanitize inputs for CSV generation
         fund['source'] = utils.sanitize_input(fund['source'], max_length=100)
         fund['description'] = utils.sanitize_input(fund.get('description', 'No description provided'), max_length=500)
         category = trans(f'funds_{fund["category"]}', default=fund['category'].capitalize())
         
         output = []
         output.extend(ficore_csv_header(current_user))
-        output.append([trans('funds_report_title', default='FiCore Records - Fund Report')])
+        output.append([trans('funds_summary_title', default='FiCore Records - Fund Summary')])  # Updated title
         output.append([''])
         output.append([trans('funds_source', default='Source'), fund['source']])
         output.append([trans('funds_amount', default='Amount'), utils.format_currency(fund['amount'])])
@@ -264,7 +260,7 @@ def generate_report_csv(id):
         output.append([trans('general_description', default='Description'), fund['description']])
         output.append([trans('funds_date_recorded', default='Date Recorded'), utils.format_date(fund['created_at'])])
         output.append([''])
-        output.append([trans('funds_report_footer', default='This document serves as a fund report recorded on FiCore Records.')])
+        output.append([trans('funds_summary_footer', default='This document summarizes a fund recorded on FiCore Records.')])  # Updated footer
         
         buffer = io.BytesIO()
         writer = csv.writer(buffer, lineterminator='\n')
@@ -275,7 +271,7 @@ def generate_report_csv(id):
             buffer,
             mimetype='text/csv',
             headers={
-                'Content-Disposition': f'attachment; filename=FiCore_Fund_Report_{utils.sanitize_input(fund["source"], max_length=50)}.csv'
+                'Content-Disposition': f'attachment; filename=FiCore_Fund_Summary_{utils.sanitize_input(fund["source"], max_length=50)}.csv'  # Updated filename
             }
         )
         
@@ -343,7 +339,6 @@ def edit(id):
             flash(trans('funds_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('funds.index'))
         
-        # Convert naive datetimes to timezone-aware
         if fund.get('created_at') and fund['created_at'].tzinfo is None:
             fund['created_at'] = fund['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
