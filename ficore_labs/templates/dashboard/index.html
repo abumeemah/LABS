@@ -101,7 +101,6 @@
                 {% if current_user.role in ['startup', 'admin'] %}
                     <a href="{{ url_for('reports.customer_reports') }}" class="btn btn-primary">{{ trans('reports_customer', default='Customer Reports') | escape }}</a>
                     <a href="{{ url_for('reports.investor_reports') }}" class="btn btn-primary">{{ trans('reports_investor', default='Investor Reports') | escape }}</a>
-                    <a href="{{ url_for('forecasts.view') }}" class="btn btn-primary">{{ trans('forecasts_view', default='View Forecasts') | escape }}</a>
                 {% endif %}
             </div>
         </div>
