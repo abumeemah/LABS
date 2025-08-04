@@ -447,7 +447,8 @@ def create_app():
                 extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
             )
             if current_user.is_authenticated:
-                return redirect(url_for('users.get_post_login_redirect', user_role=current_user.role))
+                from users.routes import get_post_login_redirect
+                return redirect(get_post_login_redirect(current_user.role)))
             return redirect(url_for('general_bp.landing'))
         except Exception as e:
             current_app.logger.error(f"Error in root route: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
