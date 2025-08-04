@@ -364,6 +364,17 @@ def create_app():
                 logger.error(f'Failed to initialize navigation: {str(e)}')
                 raise
 
+    # Define format_currency filter
+    def format_currency(value):
+        try:
+            return "₦{:,.2f}".format(float(value))
+        except (ValueError, TypeError) as e:
+            logger.warning(f'Error formatting currency {value}: {str(e)}')
+            return str(value)
+
+    # Register format_currency filter
+    app.jinja_env.filters['format_currency'] = format_currency
+
     # Set up Jinja globals
     app.jinja_env.globals.update(
         FACEBOOK_URL=app.config.get('FACEBOOK_URL', 'https://facebook.com/ficoreafrica'),
