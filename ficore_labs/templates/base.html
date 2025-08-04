@@ -190,7 +190,7 @@
                     </a>
                     <a href="{{ url_for('view_data') | e }}" class="nav-item {% if request.endpoint == 'view_data' %}active{% endif %}" aria-label="{{ t('view_data_title', default='View Data') | e }}">
                         <i class="bi bi-eye"></i>
-                        <div class="nav-label">{{ t('view_data_title, default='View Data') | e }}</div>
+                        <div class="nav-label">{{ t('view_data_title', default='View Data') | e }}</div>
                     </a>
                 {% endif %}
                 <a href="{{ url_for('users.logout') | e }}" class="nav-item {% if request.endpoint == 'users.logout' %}active{% endif %}" aria-label="{{ t('general_logout, default='Logout') | e }}">
