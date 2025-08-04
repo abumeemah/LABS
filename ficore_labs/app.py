@@ -21,6 +21,7 @@ from flask_babel import Babel
 from flask_compress import Compress
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from users.routes import get_post_login_redirect  # Import the helper function
 from utils import (
     get_mongo_db, logger, initialize_tools_with_urls,
     UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
@@ -447,8 +448,7 @@ def create_app():
                 extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
             )
             if current_user.is_authenticated:
-                from users.routes import get_post_login_redirect
-                return redirect(get_post_login_redirect(current_user.role)))
+                return redirect(get_post_login_redirect(current_user.role))
             return redirect(url_for('general_bp.landing'))
         except Exception as e:
             current_app.logger.error(f"Error in root route: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
