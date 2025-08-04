@@ -3,7 +3,8 @@ import logging
 import uuid
 import os
 import certifi
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo  # Added ZoneInfo import
 from flask import session, has_request_context, current_app, url_for, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -342,9 +343,9 @@ def initialize_tools_with_urls(app):
             ADMIN_TOOLS = generate_tools_with_urls(_ADMIN_TOOLS)
             ADMIN_NAV = generate_tools_with_urls(_ADMIN_NAV)
             ALL_TOOLS = TRADER_TOOLS + STARTUP_TOOLS + ADMIN_TOOLS
-            logger.info('Initialized tools and navigation with resolved URLs')
+            logger.info('Initialized tools and navigation with resolved URLs', extra={'session_id': 'no-session-id'})
     except Exception as e:
-        logger.error(f'Error initializing tools with URLs: {str(e)}')
+        logger.error(f'Error initializing tools with URLs: {str(e)}', extra={'session_id': 'no-session-id'})
         raise
 
 def generate_tools_with_urls(tools):
@@ -354,11 +355,11 @@ def generate_tools_with_urls(tools):
             url = url_for(tool['endpoint'], _external=True)
             icon = tool.get('icon', 'bi-question-circle')
             if not icon or not icon.startswith('bi-'):
-                logger.warning(f"Invalid icon for tool {tool.get('label', 'unknown')}: {icon}")
+                logger.warning(f"Invalid icon for tool {tool.get('label', 'unknown')}: {icon}", extra={'session_id': 'no-session-id'})
                 icon = 'bi-question-circle'
             result.append({**tool, 'url': url, 'icon': icon})
         except BuildError as e:
-            logger.warning(f"Failed to generate URL for endpoint {tool.get('endpoint', 'unknown')}: {str(e)}")
+            logger.warning(f"Failed to generate URL for endpoint {tool.get('endpoint', 'unknown')}: {str(e)}", extra={'session_id': 'no-session-id'})
             result.append({**tool, 'url': '#', 'icon': tool.get('icon', 'bi-question-circle')})
     return result
 
@@ -392,10 +393,10 @@ def get_explore_features():
                     "description": tool.get("description", "Description not available"),
                     "url": tool["url"] if tool["url"] != "#" else url_for("users.login", _external=True)
                 })
-        logger.info("Successfully retrieved selected explore features for Business and Startups")
+        logger.info("Successfully retrieved selected explore features for Business and Startups", extra={'session_id': 'no-session-id'})
         return features
     except Exception as e:
-        logger.error(f"Error retrieving explore features: {str(e)}")
+        logger.error(f"Error retrieving explore features: {str(e)}", extra={'session_id': 'no-session-id'})
         return []
 
 def get_limiter():
@@ -413,14 +414,14 @@ def log_tool_usage(action, tool_name=None, details=None, user_id=None, db=None, 
             'user_id': str(user_id) if user_id else None,
             'session_id': effective_session_id,
             'action': details.get('action') if details else None,
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),  # Updated to timezone-aware
             'ip_address': request.remote_addr if has_request_context() else 'unknown',
             'user_agent': request.headers.get('User-Agent') if has_request_context() else 'unknown'
         }
         db.tool_usage.insert_one(log_entry)
-        logger.info(f"Logged tool usage: {action}")
+        logger.info(f"Logged tool usage: {action}", extra={'session_id': effective_session_id, 'user_id': user_id or 'none'})
     except Exception as e:
-        logger.error(f"Failed to log tool usage for action {action}: {str(e)}")
+        logger.error(f"Failed to log tool usage for action {action}: {str(e)}", extra={'session_id': session_id or 'no-session-id'})
         raise RuntimeError(f"Failed to log tool usage: {str(e)}")
 
 def create_anonymous_session():
@@ -428,34 +429,34 @@ def create_anonymous_session():
         with current_app.app_context():
             session['sid'] = str(uuid.uuid4())
             session['is_anonymous'] = True
-            session['created_at'] = datetime.utcnow().isoformat()
+            session['created_at'] = datetime.now(timezone.utc).isoformat()  # Updated to timezone-aware
             if 'lang' not in session:
                 session['lang'] = 'en'
             session.modified = True
-            logger.info(f"Created anonymous session: {session['sid']}")
+            logger.info(f"Created anonymous session: {session['sid']}", extra={'session_id': session['sid']})
     except Exception as e:
-        logger.error(f"Error creating anonymous session: {str(e)}")
+        logger.error(f"Error creating anonymous session: {str(e)}", extra={'session_id': 'error-session'})
         session['sid'] = f'error-{str(uuid.uuid4())[:8]}'
         session['is_anonymous'] = True
         session.modified = True
 
 def clean_currency(value, max_value=10000000000):
     try:
-        if value is None or str(value).strip() == '':
+        if value is None or (isinstance(value, str) and value.strip() == ''):
             return 0.0
         if isinstance(value, (int, float)):
             value = float(value)
             if value > max_value:
                 raise ValidationError(f"Input cannot exceed {max_value:,}")
+            if value < 0:
+                raise ValidationError("Negative currency values are not allowed")
             return value
         value_str = str(value).strip()
         cleaned = re.sub(r'[^\d.]', '', value_str.replace('NGN', '').replace('₦', '').replace('$', '').replace('€', '').replace('£', '').replace(',', ''))
         parts = cleaned.split('.')
-        if len(parts) > 2:
-            cleaned = parts[0] + '.' + ''.join(parts[1:])
-        if not cleaned or cleaned == '.':
+        if len(parts) > 2 or cleaned.count('-') > 1 or (cleaned.count('-') == 1 and not cleaned.startswith('-')):
             raise ValidationError('Invalid currency format')
-        if cleaned.count('.') > 1 or cleaned.count('-') > 1 or (cleaned.count('-') == 1 and not cleaned.startswith('-')):
+        if not cleaned or cleaned == '.':
             raise ValidationError('Invalid currency format')
         result = float(cleaned)
         if result < 0:
@@ -464,7 +465,7 @@ def clean_currency(value, max_value=10000000000):
             raise ValidationError(f"Input cannot exceed {max_value:,}")
         return result
     except Exception as e:
-        logger.error(f"Error in clean_currency for value '{value}': {str(e)}")
+        logger.error(f"Error in clean_currency for value '{value}': {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
         raise ValidationError('Invalid currency format')
 
 def is_valid_email(email):
@@ -479,7 +480,7 @@ def get_mongo_db():
             if 'mongo' not in current_app.extensions:
                 mongo_uri = os.getenv('MONGO_URI')
                 if not mongo_uri:
-                    logger.error("MONGO_URI environment variable not set")
+                    logger.error("MONGO_URI environment variable not set", extra={'session_id': 'no-session-id'})
                     raise RuntimeError("MONGO_URI environment variable not set")
                 client = MongoClient(
                     mongo_uri,
@@ -495,7 +496,7 @@ def get_mongo_db():
             db.command('ping')
             return db
     except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-        logger.error(f"Failed to connect to MongoDB: {str(e)}")
+        logger.error(f"Failed to connect to MongoDB: {str(e)}", extra={'session_id': 'no-session-id'})
         raise RuntimeError(f"Failed to connect to MongoDB: {str(e)}")
 
 def requires_role(role):
@@ -515,7 +516,7 @@ def requires_role(role):
                     flash('You do not have permission to access this page.', 'danger')
                     return redirect(url_for('dashboard.index'))
                 if not current_user.is_trial_active():
-                    logger.info(f"User {current_user.id} trial expired, redirecting to subscription")
+                    logger.info(f"User {current_user.id} trial expired, redirecting to subscription", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
                     return redirect(url_for('subscribe_bp.subscription_required'))
                 return f(*args, **kwargs)
         return decorated_function
@@ -541,24 +542,30 @@ def can_user_interact(user):
     try:
         with current_app.app_context():
             if not user or not user.is_authenticated:
-                logger.info("User interaction denied: No authenticated user")
+                logger.info("User interaction denied: No authenticated user", extra={'session_id': session.get('sid', 'no-session-id')})
                 return False
             if user.role == 'admin':
-                logger.info(f"User {user.id} allowed to interact: Admin role")
+                logger.info(f"User {user.id} allowed to interact: Admin role", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
                 return True
             if user.get('is_subscribed', False):
-                logger.info(f"User {user.id} allowed to interact: Active subscription")
+                logger.info(f"User {user.id} allowed to interact: Active subscription", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
                 return True
             if user.get('is_trial', False):
                 trial_end = user.get('trial_end')
-                if trial_end and trial_end > datetime.utcnow():
-                    logger.info(f"User {user.id} allowed to interact: Active trial")
-                    return True
-                logger.info(f"User {user.id} trial expired: {trial_end}")
-            logger.info(f"User {user.id} interaction denied: No active subscription or trial")
+                if trial_end:
+                    trial_end_aware = (
+                        trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                        if trial_end.tzinfo is None
+                        else trial_end
+                    )
+                    if trial_end_aware > datetime.now(timezone.utc):
+                        logger.info(f"User {user.id} allowed to interact: Active trial", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+                        return True
+                    logger.info(f"User {user.id} trial expired: {trial_end_aware}", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
+            logger.info(f"User {user.id} interaction denied: No active subscription or trial", extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user.id})
             return False
     except Exception as e:
-        logger.error(f"Error checking user interaction for user {user.get('id', 'unknown')}: {str(e)}")
+        logger.error(f"Error checking user interaction for user {user.get('id', 'unknown')}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
         return False
 
 def format_currency(amount, currency='₦', lang=None, include_symbol=True):
@@ -573,7 +580,7 @@ def format_currency(amount, currency='₦', lang=None, include_symbol=True):
                 formatted = f"{amount:,.2f}"
             return f"{currency}{formatted}" if include_symbol else formatted
     except Exception as e:
-        logger.warning(f"Error formatting currency {amount}: {str(e)}")
+        logger.warning(f"Error formatting currency {amount}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
         return f"{currency}0" if include_symbol else "0"
 
 def format_date(date_obj, lang=None, format_type='short'):
@@ -590,15 +597,18 @@ def format_date(date_obj, lang=None, format_type='short'):
                     try:
                         date_obj = datetime.fromisoformat(date_obj.replace('Z', '+00:00'))
                     except ValueError:
+                        logger.warning(f"Invalid date format for input: {date_obj}", extra={'session_id': session.get('sid', 'no-session-id')})
                         return date_obj
+            # Ensure datetime is timezone-aware
+            date_obj_aware = date_obj.replace(tzinfo=ZoneInfo("UTC")) if date_obj.tzinfo is None else date_obj
             if format_type == 'iso':
-                return date_obj.strftime('%Y-%m-%d')
+                return date_obj_aware.strftime('%Y-%m-%d')
             elif format_type == 'long':
-                return date_obj.strftime('%d %B %Y' if lang == 'ha' else '%B %d, %Y')
+                return date_obj_aware.strftime('%d %B %Y' if lang == 'ha' else '%B %d, %Y')
             else:
-                return date_obj.strftime('%d/%m/%Y' if lang == 'ha' else '%m/%d/%Y')
+                return date_obj_aware.strftime('%d/%m/%Y' if lang == 'ha' else '%m/%d/%Y')
     except Exception as e:
-        logger.warning(f"Error formatting date {date_obj}: {str(e)}")
+        logger.warning(f"Error formatting date {date_obj}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id')})
         return str(date_obj) if date_obj else ''
 
 def sanitize_input(input_string, max_length=None):
@@ -606,6 +616,8 @@ def sanitize_input(input_string, max_length=None):
         return ''
     sanitized = str(input_string).strip()
     sanitized = re.sub(r'[<>"\']', '', sanitized)
+    if re.search(r'[<>]', sanitized):
+        logger.warning(f"Potential malicious input detected: {sanitized}", extra={'session_id': session.get('sid', 'no-session-id')})
     if max_length and len(sanitized) > max_length:
         sanitized = sanitized[:max_length]
     return sanitized
@@ -635,15 +647,16 @@ def log_user_action(action, details=None, user_id=None):
                 'session_id': session_id,
                 'action': action,
                 'details': details or {},
-                'timestamp': datetime.utcnow(),
+                'timestamp': datetime.now(timezone.utc),  # Updated to timezone-aware
                 'ip_address': request.remote_addr if has_request_context() else None,
                 'user_agent': request.headers.get('User-Agent') if has_request_context() else None
             }
             db = get_mongo_db()
             db.audit_logs.insert_one(log_entry)
-            logger.info(f"User action logged: {action} by user {user_id}")
+            logger.info(f"User action logged: {action} by user {user_id}", extra={'session_id': session_id, 'user_id': user_id or 'none'})
     except Exception as e:
-        logger.error(f"Error logging user action: {str(e)}")
+        logger.error(f"Error logging user action: {str(e)}", extra={'session_id': session_id or 'no-session-id'})
+        raise
 
 __all__ = [
     'clean_currency', 'log_tool_usage', 'get_limiter', 'create_anonymous_session', 
