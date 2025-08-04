@@ -71,21 +71,6 @@
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body text-center">
                             <div class="text-primary mb-2">
-                                <i class="bi bi-currency-exchange fa-2x"></i>
-                            </div>
-                            <h6 class="card-title">{{ trans('general_cashflows', default='Cashflows') | escape }}</h6>
-                            <p class="card-text">
-                                <span class="h5 text-primary">{{ stats.total_payments + stats.total_receipts }}</span><br>
-                                <small class="text-muted">{{ trans('general_payments_receipts', default='Payments & Receipts') | escape }}</small>
-                            </p>
-                            <a href="{{ url_for('cashflows.index') }}" class="btn btn-outline-primary btn-sm">{{ trans('general_view', default='View') | escape }}</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="card border-0 shadow-sm h-100">
-                        <div class="card-body text-center">
-                            <div class="text-primary mb-2">
                                 <i class="bi bi-bank fa-2x"></i>
                             </div>
                             <h6 class="card-title">{{ trans('general_funds', default='Funds') | escape }}</h6>
