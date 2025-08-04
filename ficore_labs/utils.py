@@ -52,49 +52,6 @@ class SessionAdapter(logging.LoggerAdapter):
 logger = SessionAdapter(root_logger, {})
 
 # Navigation lists
-_UNAUTHENTICATED_NAV = [
-    {
-        "endpoint": "general_bp.home",
-        "label": "Home",
-        "label_key": "general_home",
-        "description_key": "general_home_desc",
-        "tooltip_key": "general_home_tooltip",
-        "icon": "bi-house"
-    },
-    {
-        "endpoint": "general_bp.about",
-        "label": "About",
-        "label_key": "general_about",
-        "description_key": "general_about_desc",
-        "tooltip_key": "general_about_tooltip",
-        "icon": "bi-info-circle"
-    },
-    {
-        "endpoint": "general_bp.contact",
-        "label": "Contact",
-        "label_key": "general_contact",
-        "description_key": "general_contact_desc",
-        "tooltip_key": "general_contact_tooltip",
-        "icon": "bi-envelope"
-    },
-    {
-        "endpoint": "users.login",
-        "label": "Login",
-        "label_key": "general_login",
-        "description_key": "general_login_desc",
-        "tooltip_key": "general_login_tooltip",
-        "icon": "bi-box-arrow-in-right"
-    },
-    {
-        "endpoint": "users.signup",
-        "label": "Sign Up",
-        "label_key": "general_signup",
-        "description_key": "general_signup_desc",
-        "tooltip_key": "general_signup_tooltip",
-        "icon": "bi-person-plus"
-    }
-]
-
 _TRADER_TOOLS = [
     {
         "endpoint": "debtors.index",
@@ -322,7 +279,6 @@ _ADMIN_NAV = [
 ]
 
 # Initialize module-level variables
-UNAUTHENTICATED_NAV = []
 TRADER_TOOLS = []
 TRADER_NAV = []
 STARTUP_TOOLS = []
@@ -332,10 +288,9 @@ ADMIN_NAV = []
 ALL_TOOLS = []
 
 def initialize_tools_with_urls(app):
-    global UNAUTHENTICATED_NAV, TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV, ALL_TOOLS
+    global TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV, ALL_TOOLS
     try:
         with app.app_context():
-            UNAUTHENTICATED_NAV = generate_tools_with_urls(_UNAUTHENTICATED_NAV)
             TRADER_TOOLS = generate_tools_with_urls(_TRADER_TOOLS)
             TRADER_NAV = generate_tools_with_urls(_TRADER_NAV)
             STARTUP_TOOLS = generate_tools_with_urls(_STARTUP_TOOLS)
@@ -663,7 +618,7 @@ __all__ = [
     'is_valid_email', 'get_mongo_db', 'requires_role', 'is_admin', 'can_user_interact',
     'format_currency', 'format_date', 'sanitize_input', 'generate_unique_id', 
     'validate_required_fields', 'get_user_language', 'log_user_action', 
-    'initialize_tools_with_urls', 'UNAUTHENTICATED_NAV', 'TRADER_TOOLS', 
+    'initialize_tools_with_urls', 'TRADER_TOOLS', 
     'TRADER_NAV', 'STARTUP_TOOLS', 'STARTUP_NAV', 'ADMIN_TOOLS', 'ADMIN_NAV', 
     'ALL_TOOLS', 'get_explore_features'
 ]
