@@ -47,7 +47,7 @@
             {% endif %}
         </div>
         <div class="header-right">
-            <button class="icon-btn help-icon-btn" onclick="location.href='{% if current_user.is_authenticated %}{{ url_for('settings.profile') | e }}{% else %}{{ url_for('general_bp.contact') | e }}{% endif %}'" data-bs-toggle="tooltip" data-bs-title="{{ t('general_help_tooltip', default='Get help') | e }}" aria-label="{{ t('general_help', default='Help') | e }}">
+            <button class="icon-btn help-icon-btn" onclick="location.href='{% if current_user.is_authenticated %}{{ url_for('settings.profile') | e }}{% else %}{{ url_for('general_bp.contact') | e }}{% endif %}'" data-bs-toggle="tooltip" data-bs-title="{{ t('general_help_tooltip', default='Get help') | e }}" aria-label="{{ t('general_help', default='HELP') | e }}">
                 <i class="bi bi-question-circle"></i>
                 <span class="help-text">{{ t('general_help', default='HELP') | e }}</span>
             </button>
@@ -169,9 +169,14 @@
     </main>
 
     {% if current_user.is_authenticated %}
+        {{ log_user_action('debug_bottom_nav', {'role': current_user.role, 'nav_items_count': (ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV) | length, 'TRADER_NAV_count': TRADER_NAV | length, 'STARTUP_NAV_count': STARTUP_NAV | length, 'ADMIN_NAV_count': ADMIN_NAV | length}) }}
         <nav class="bottom-nav d-md-none" role="navigation" aria-label="{{ t('general_mobile_navigation', default='Mobile navigation') | e }}">
             <div class="nav-container">
                 {% set nav_items = ADMIN_NAV if current_user.role == 'admin' else STARTUP_NAV if current_user.role == 'startup' else TRADER_NAV %}
+                {% if not nav_items %}
+                    {% set nav_items = TRADER_NAV %}
+                    {{ log_user_action('debug_nav_fallback', {'role': current_user.role, 'message': 'Navigation list empty, using TRADER_NAV'}) }}
+                {% endif %}
                 {% for item in nav_items %}
                     <a href="{{ item.url | e }}" class="nav-item {% if request.endpoint == item.endpoint %}active{% endif %}" aria-label="{{ t(item.label_key, default=item.label) | e }}">
                         <i class="bi {{ item.icon | default('bi-question-circle') | e }}"></i>
@@ -185,12 +190,12 @@
                     </a>
                     <a href="{{ url_for('view_data') | e }}" class="nav-item {% if request.endpoint == 'view_data' %}active{% endif %}" aria-label="{{ t('view_data_title', default='View Data') | e }}">
                         <i class="bi bi-eye"></i>
-                        <div class="nav-label">{{ t('view_data_title', default='View Data') | e }}</div>
+                        <div class="nav-label">{{ t('view_data_title, default='View Data') | e }}</div>
                     </a>
                 {% endif %}
-                <a href="{{ url_for('users.logout') | e }}" class="nav-item {% if request.endpoint == 'users.logout' %}active{% endif %}" aria-label="{{ t('general_logout', default='Logout') | e }}">
+                <a href="{{ url_for('users.logout') | e }}" class="nav-item {% if request.endpoint == 'users.logout' %}active{% endif %}" aria-label="{{ t('general_logout, default='Logout') | e }}">
                     <i class="bi bi-box-arrow-right"></i>
-                    <div class="nav-label">{{ t('general_logout', default='Logout') | e }}</div>
+                    <div class="nav-label">{{ t('general_logout, default='Logout') | e }}</div>
                 </a>
             </div>
         </nav>
