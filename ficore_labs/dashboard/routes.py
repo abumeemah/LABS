@@ -30,9 +30,11 @@ def index():
         'total_funds': 0,
         'total_debtors_amount': 0,
         'total_creditors_amount': 0,
-        'total_payments_amount': 0,  # Added missing field
+        'total_payments_amount': 0,
         'total_receipts_amount': 0,
-        'total_funds_amount': 0
+        'total_funds_amount': 0,
+        'total_forecasts': 0,  # Added for forecasts count
+        'total_forecasts_amount': 0  # Added for forecasts amount
     }
     can_interact = False
 
@@ -46,7 +48,7 @@ def index():
             recent_debtors = list(db.records.find({**query, 'type': 'debtor'}).sort('created_at', -1).limit(5))
             recent_payments = list(db.cashflows.find({**query, 'type': 'payment'}).sort('created_at', -1).limit(5))
             recent_receipts = list(db.cashflows.find({**query, 'type': 'receipt'}).sort('created_at', -1).limit(5))
-            recent_funds = list(db.funds.find(query).sort('created_at', -1).limit(5))
+            recent_funds = list(db.records.find({**query, 'type': 'fund'}).sort('created_at', -1).limit(5))  # Updated to use records collection
         except Exception as e:
             logger.error(f"Error querying MongoDB for dashboard data: {str(e)}", 
                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
@@ -95,12 +97,14 @@ def index():
                 'total_creditors': db.records.count_documents({**query, 'type': 'creditor'}),
                 'total_payments': db.cashflows.count_documents({**query, 'type': 'payment'}),
                 'total_receipts': db.cashflows.count_documents({**query, 'type': 'receipt'}),
-                'total_funds': db.funds.count_documents(query),
+                'total_funds': db.records.count_documents({**query, 'type': 'fund'}),
                 'total_debtors_amount': sum(doc.get('amount_owed', 0) for doc in db.records.find({**query, 'type': 'debtor'})),
                 'total_creditors_amount': sum(doc.get('amount_owed', 0) for doc in db.records.find({**query, 'type': 'creditor'})),
                 'total_payments_amount': sum(doc.get('amount', 0) for doc in db.cashflows.find({**query, 'type': 'payment'})),
                 'total_receipts_amount': sum(doc.get('amount', 0) for doc in db.cashflows.find({**query, 'type': 'receipt'})),
-                'total_funds_amount': sum(doc.get('amount', 0) for doc in db.funds.find(query))
+                'total_funds_amount': sum(doc.get('amount', 0) for doc in db.records.find({**query, 'type': 'fund'})),
+                'total_forecasts': db.records.count_documents({**query, 'type': 'forecast'}),
+                'total_forecasts_amount': sum(doc.get('projected_revenue', 0) for doc in db.records.find({**query, 'type': 'forecast'}))
             })
         except Exception as e:
             logger.error(f"Error calculating stats for dashboard: {str(e)}", 
