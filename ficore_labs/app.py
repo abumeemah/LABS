@@ -375,6 +375,7 @@ def create_app():
 
     # Register format_currency filter
     app.jinja_env.filters['format_currency'] = format_currency
+    app.jinja_env.globals['format_currency'] = format_currency
 
     # Set up Jinja globals
     app.jinja_env.globals.update(
