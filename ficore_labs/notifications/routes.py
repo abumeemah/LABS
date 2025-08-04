@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, session, request
 from flask_login import login_required, current_user
 from utils import get_mongo_db, logger, requires_role, get_limiter
 from translations import trans
+import utils  # <-- Added import for utils
 
 notifications = Blueprint('notifications', __name__, url_prefix='/notifications')
 
@@ -33,5 +34,3 @@ def count():
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': user_id}
         )
         return jsonify({'error': trans('notification_count_error', default='Error fetching notification count', lang=session.get('lang', 'en'))}), 500
-
-
