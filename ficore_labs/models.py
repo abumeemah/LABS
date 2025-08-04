@@ -1,6 +1,6 @@
 from pymongo import MongoClient, ASCENDING, DESCENDING
 from bson import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone  # Added timezone import
 import logging
 import uuid
 from werkzeug.security import generate_password_hash
@@ -9,6 +9,7 @@ from functools import lru_cache
 from translations import trans
 from utils import get_mongo_db, logger
 import time
+from zoneinfo import ZoneInfo
 
 # Configure logger for the application
 logger = logging.getLogger('business_finance_app')
@@ -78,9 +79,9 @@ def initialize_app_data(app):
                         'is_trial': False,
                         'is_subscribed': True,
                         'subscription_plan': 'admin',
-                        'subscription_start': datetime.utcnow(),
+                        'subscription_start': datetime.now(timezone.utc),  # Updated to timezone-aware
                         'subscription_end': None,
-                        'created_at': datetime.utcnow()
+                        'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
                     }
                     try:
                         if admin_user:
@@ -462,8 +463,8 @@ def initialize_app_data(app):
                                         {
                                             '$set': {
                                                 'temp_password': temp_password,
-                                                'created_at': datetime.utcnow(),
-                                                'expires_at': datetime.utcnow() + timedelta(days=7)
+                                                'created_at': datetime.now(timezone.utc),  # Updated to timezone-aware
+                                                'expires_at': datetime.now(timezone.utc) + timedelta(days=7)  # Updated to timezone-aware
                                             },
                                             '$setOnInsert': {
                                                 '_id': ObjectId(),
@@ -484,8 +485,8 @@ def initialize_app_data(app):
                                     raise
                             if 'is_trial' not in user:
                                 updates['is_trial'] = True
-                                updates['trial_start'] = datetime.utcnow()
-                                updates['trial_end'] = datetime.utcnow() + timedelta(days=30)
+                                updates['trial_start'] = datetime.now(timezone.utc)  # Updated to timezone-aware
+                                updates['trial_end'] = datetime.now(timezone.utc) + timedelta(days=30)  # Updated to timezone-aware
                                 updates['is_subscribed'] = False
                                 updates['subscription_plan'] = None
                                 updates['subscription_start'] = None
@@ -542,8 +543,8 @@ class User:
         self.setup_complete = setup_complete
         self.language = language
         self.is_trial = is_trial
-        self.trial_start = trial_start or datetime.utcnow()
-        self.trial_end = trial_end or (datetime.utcnow() + timedelta(days=30))
+        self.trial_start = trial_start or datetime.now(timezone.utc)  # Updated to timezone-aware
+        self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))  # Updated to timezone-aware
         self.is_subscribed = is_subscribed
         self.subscription_plan = subscription_plan
         self.subscription_start = subscription_start
@@ -581,9 +582,19 @@ class User:
             bool: True if trial or subscription is active, False otherwise
         """
         if self.is_subscribed and self.subscription_end:
-            return datetime.utcnow() <= self.subscription_end
+            subscription_end_aware = (
+                self.subscription_end.replace(tzinfo=ZoneInfo("UTC"))
+                if self.subscription_end.tzinfo is None
+                else self.subscription_end
+            )
+            return datetime.now(timezone.utc) <= subscription_end_aware
         if self.is_trial and self.trial_end:
-            return datetime.utcnow() <= self.trial_end
+            trial_end_aware = (
+                self.trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                if self.trial_end.tzinfo is None
+                else self.trial_end
+            )
+            return datetime.now(timezone.utc) <= trial_end_aware
         return False
 
 def create_user(db, user_data):
@@ -613,13 +624,13 @@ def create_user(db, user_data):
             'setup_complete': user_data.get('setup_complete', False),
             'language': user_data.get('language', 'en'),
             'is_trial': True,
-            'trial_start': datetime.utcnow(),
-            'trial_end': datetime.utcnow() + timedelta(days=30),
+            'trial_start': datetime.now(timezone.utc),  # Updated to timezone-aware
+            'trial_end': datetime.now(timezone.utc) + timedelta(days=30),  # Updated to timezone-aware
             'is_subscribed': False,
             'subscription_plan': None,
             'subscription_start': None,
             'subscription_end': None,
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),  # Updated to timezone-aware
             'business_details': user_data.get('business_details'),
             'profile_picture': user_data.get('profile_picture', None),
             'phone': user_data.get('phone', None),
@@ -846,7 +857,7 @@ def update_record(db, record_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.utcnow()
+        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
         result = db.records.update_one(
             {'_id': ObjectId(record_id)},
             {'$set': update_data}
@@ -918,7 +929,7 @@ def update_cashflow(db, cashflow_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.utcnow()
+        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
         result = db.cashflows.update_one(
             {'_id': ObjectId(cashflow_id)},
             {'$set': update_data}
@@ -1209,7 +1220,7 @@ def update_kyc_record(db, kyc_id, update_data):
         bool: True if updated, False if not found or no changes made
     """
     try:
-        update_data['updated_at'] = datetime.utcnow()
+        update_data['updated_at'] = datetime.now(timezone.utc)  # Updated to timezone-aware
         result = db.kyc_records.update_one(
             {'_id': ObjectId(kyc_id)},
             {'$set': update_data}
