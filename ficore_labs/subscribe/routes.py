@@ -39,7 +39,7 @@ def subscribe():
             }
         ]
         logger.info(
-            f"Rendering subscription page for user {current_user.id}",
+            f"Rendering subscription page for user {current_user.id}, is_subscribed: {current_user.is_subscribed}, is_trial_active: {current_user.is_trial_active()}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         return render_template(
@@ -63,6 +63,14 @@ def subscribe():
 def initiate_payment():
     """Initiate payment with Paystack."""
     try:
+        if not os.getenv('PAYSTACK_SECRET_KEY'):
+            logger.error(
+                f"Paystack secret key missing for user {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('general_error', default='Payment configuration error'), 'danger')
+            return redirect(url_for('subscribe_bp.subscribe'))
+
         plan_code = utils.sanitize_input(request.form.get('plan_code'), max_length=20)
         if plan_code not in ['monthly', 'yearly']:
             logger.error(
@@ -231,7 +239,7 @@ def subscription_required():
     try:
         lang = session.get('lang', 'en')
         logger.info(
-            f"Rendering subscription required page for user {current_user.id}",
+            f"Rendering subscription required page for user {current_user.id}, is_subscribed: {current_user.is_subscribed}, is_trial_active: {current_user.is_trial_active()}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         return render_template(
@@ -255,12 +263,14 @@ def subscription_status():
     try:
         lang = session.get('lang', 'en')
         logger.info(
-            f"Rendering subscription status page for user {current_user.id}",
+            f"Rendering subscription status page for user {current_user.id}, is_subscribed: {current_user.is_subscribed}, is_trial_active: {current_user.is_trial_active()}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         return render_template(
             'subscribe/subscription_status.html',
-            title=trans('subscribe_status_title', lang=lang, default='Subscription Status')
+            title=trans('subscribe_status_title', lang=lang, default='Subscription Status'),
+            is_subscribed=current_user.is_subscribed,
+            is_trial_active=current_user.is_trial_active()
         )
     except Exception as e:
         logger.error(
