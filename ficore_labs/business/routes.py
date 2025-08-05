@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, render_template, session, request
 from flask_login import current_user, login_required
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo  # Added ZoneInfo import
+from zoneinfo import ZoneInfo
 import utils
 from utils import logger
 from translations import trans
@@ -37,7 +37,7 @@ def home():
         total_i_am_owed = utils.clean_currency(debtors_result[0]['total'] if debtors_result else 0)
 
         # Fetch cashflow summary
-        today = datetime.now(timezone.utc)  # Updated to timezone-aware
+        today = datetime.now(timezone.utc)
         start_of_month = datetime(today.year, today.month, 1, tzinfo=timezone.utc)
         receipts_pipeline = [
             {'$match': {'user_id': user_id, 'type': 'receipt', 'created_at': {'$gte': start_of_month}}},
@@ -56,7 +56,8 @@ def home():
 
         logger.info(
             f"Rendered business homepage for user {user_id}, read_only={is_read_only}, "
-            f"total_i_owe={total_i_owe}, total_i_am_owed={total_i_am_owed}, net_cashflow={net_cashflow}",
+            f"total_i_owe={total_i_owe}, total_i_am_owed={total_i_am_owed}, net_cashflow={net_cashflow}, "
+            f"total_receipts={total_receipts}, total_payments={total_payments}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
         )
 
@@ -67,7 +68,7 @@ def home():
             net_cashflow=net_cashflow,
             total_receipts=total_receipts,
             total_payments=total_payments,
-            title=utils.trans('business_home', lang=lang, default='Business Home'),
+            title=trans('business_home', lang=lang, default='Business Home'),
             format_currency=utils.format_currency,
             is_read_only=is_read_only,
             tools_for_template=utils.TRADER_NAV if current_user.role == 'trader' else utils.STARTUP_NAV if current_user.role == 'startup' else utils.ADMIN_NAV,
@@ -80,8 +81,8 @@ def home():
         )
         return render_template(
             'general/error.html',
-            error=utils.trans('dashboard_error', lang=lang, default='An error occurred while loading the dashboard'),
-            title=utils.trans('error', lang=lang, default='Error')
+            error=trans('dashboard_error', lang=lang, default='An error occurred while loading the dashboard'),
+            title=trans('error', lang=lang, default='Error')
         ), 500
 
 @business.route('/view_data')
@@ -96,14 +97,12 @@ def view_data():
 
         # Fetch debt records
         debt_records = list(db.records.find({'user_id': user_id}).sort('created_at', -1).limit(50))
-        # Convert naive created_at to timezone-aware
         for record in debt_records:
             if 'created_at' in record and record['created_at'].tzinfo is None:
                 record['created_at'] = record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
 
         # Fetch cashflow records
         cashflows = list(db.cashflows.find({'user_id': user_id}).sort('created_at', -1).limit(50))
-        # Convert naive created_at to timezone-aware
         for cashflow in cashflows:
             if 'created_at' in cashflow and cashflow['created_at'].tzinfo is None:
                 cashflow['created_at'] = cashflow['created_at'].replace(tzinfo=ZoneInfo("UTC"))
@@ -117,7 +116,7 @@ def view_data():
             'general/view_data.html',
             debt_records=debt_records,
             cashflows=cashflows,
-            title=utils.trans('view_data_title', lang=lang, default='View Financial Data'),
+            title=trans('view_data_title', lang=lang, default='View Financial Data'),
             format_currency=utils.format_currency,
             is_read_only=True
         )
@@ -128,8 +127,8 @@ def view_data():
         )
         return render_template(
             'general/error.html',
-            error=utils.trans('dashboard_error', lang=lang, default='An error occurred while loading financial data'),
-            title=utils.trans('error', lang=lang, default='Error')
+            error=trans('dashboard_error', lang=lang, default='An error occurred while loading financial data'),
+            title=trans('error', lang=lang, default='Error')
         ), 500
 
 @business.route('/debt/summary')
@@ -168,7 +167,7 @@ def debt_summary():
             extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
         )
         return jsonify({
-            'error': utils.trans('debt_summary_error', default='An error occurred while fetching debt summary')
+            'error': trans('debt_summary_error', default='An error occurred while fetching debt summary')
         }), 500
 
 @business.route('/cashflow/summary')
@@ -179,7 +178,7 @@ def cashflow_summary():
     try:
         db = utils.get_mongo_db()
         user_id = current_user.id
-        today = datetime.now(timezone.utc)  # Updated to timezone-aware
+        today = datetime.now(timezone.utc)
         start_of_month = datetime(today.year, today.month, 1, tzinfo=timezone.utc)
         receipts_pipeline = [
             {'$match': {'user_id': user_id, 'type': 'receipt', 'created_at': {'$gte': start_of_month}}},
@@ -192,6 +191,8 @@ def cashflow_summary():
             {'$match': {'user_id': user_id, 'type': 'payment', 'created_at': {'$gte': start_of_month}}},
             {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
         ]
+        payments_count = db.cashflows.count_documents({'user_id': user_id, 'type': 'payment', 'created_at': {'$gte': start_of_month}})
+        logger.info(f"Found {payments_count} payment records for user {user_id} in MTD")
         payments_result = list(db.cashflows.aggregate(payments_pipeline))
         total_payments = utils.clean_currency(payments_result[0]['total'] if payments_result else 0)
         net_cashflow = total_receipts - total_payments
@@ -211,7 +212,7 @@ def cashflow_summary():
             extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
         )
         return jsonify({
-            'error': utils.trans('cashflow_error', default='An error occurred while fetching cashflow summary')
+            'error': trans('cashflow_error', default='An error occurred while fetching cashflow summary')
         }), 500
 
 @business.route('/recent_activity')
@@ -228,7 +229,6 @@ def recent_activity():
         # Fetch recent debt records
         records = db.records.find({'user_id': user_id}).sort('created_at', -1).limit(3)
         for record in records:
-            # Convert naive created_at to timezone-aware
             created_at = (
                 record['created_at'].replace(tzinfo=ZoneInfo("UTC"))
                 if 'created_at' in record and record['created_at'].tzinfo is None
@@ -245,7 +245,7 @@ def recent_activity():
             name = utils.sanitize_input(
                 record.get('name', record.get('title', record.get('source', 'Unknown')))
             )
-            description = utils.trans(
+            description = trans(
                 description_key,
                 lang=lang,
                 default=f"{'Owed by' if record.get('type') == 'debtor' else 'Owe to' if record.get('type') == 'creditor' else record.get('type', '').capitalize()} {name}"
@@ -264,7 +264,6 @@ def recent_activity():
         # Fetch recent cashflows
         cashflows = db.cashflows.find({'user_id': user_id}).sort('created_at', -1).limit(3)
         for cashflow in cashflows:
-            # Convert naive created_at to timezone-aware
             created_at = (
                 cashflow['created_at'].replace(tzinfo=ZoneInfo("UTC"))
                 if 'created_at' in cashflow and cashflow['created_at'].tzinfo is None
@@ -274,7 +273,7 @@ def recent_activity():
                 continue
             activity_type = 'money_in' if cashflow.get('type') == 'receipt' else 'money_out'
             party_name = utils.sanitize_input(cashflow.get('party_name', 'Unknown'))
-            description = utils.trans(
+            description = trans(
                 'money_in_description' if cashflow.get('type') == 'receipt' else 'money_out_description',
                 lang=lang,
                 default=f"{'Received from' if cashflow.get('type') == 'receipt' else 'Paid to'} {party_name}"
@@ -291,7 +290,6 @@ def recent_activity():
         # Fetch recent feedback
         feedback_records = db.feedback.find({'user_id': user_id}).sort('timestamp', -1).limit(3)
         for feedback in feedback_records:
-            # Convert naive timestamp to timezone-aware
             timestamp = (
                 feedback['timestamp'].replace(tzinfo=ZoneInfo("UTC"))
                 if 'timestamp' in feedback and feedback['timestamp'].tzinfo is None
@@ -302,7 +300,7 @@ def recent_activity():
             tool_name = utils.sanitize_input(feedback.get('tool_name', 'unknown').capitalize())
             activities.append({
                 'type': 'feedback_submitted',
-                'description': utils.trans(
+                'description': trans(
                     'feedback_submitted_description',
                     lang=lang,
                     default=f"Submitted feedback for {tool_name}"
@@ -327,5 +325,5 @@ def recent_activity():
             extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
         )
         return jsonify({
-            'error': utils.trans('activity_error', default='An error occurred while fetching recent activity')
+            'error': trans('activity_error', default='An error occurred while fetching recent activity')
         }), 500
