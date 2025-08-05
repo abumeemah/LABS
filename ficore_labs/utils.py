@@ -192,12 +192,12 @@ _TRADER_NAV = [
 _STARTUP_NAV = [
 
     {
-        "endpoint": "funds.index",
-        "label": "Funds",
-        "label_key": "funds_dashboard",
-        "description_key": "funds_dashboard_desc",
-        "tooltip_key": "funds_tooltip",
-        "icon": "bi-piggy-bank"
+        "endpoint": "general_bp.home",
+        "label": "Home",
+        "label_key": "general_business_home",
+        "description_key": "general_business_home_desc",
+        "tooltip_key": "general_business_home_tooltip",
+        "icon": "bi-house"
     },
     {
         "endpoint": "forecasts.index",
