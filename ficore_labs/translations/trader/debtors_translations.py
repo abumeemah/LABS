@@ -18,7 +18,7 @@ DEBTORS_TRANSLATIONS = {
         'debtors_creditors_description': 'Track outstanding receivables and payables to manage cash flow effectively.',
         'debtors_add_success': 'Debtor added successfully!',
         'debtors_title': 'Debtors',
-        'debtors_subtitle': 'Manage your debtors',
+        'debtors_subtitle': 'Kula da wadanda Sanaar ke bi bashi',
         'debtors_reminder': 'Debtors Reminder',
         'debtors_create_title': 'Create New Debtor',
         'debtors_no_records': 'No debtor records found',
