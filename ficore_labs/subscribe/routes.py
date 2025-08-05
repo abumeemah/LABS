@@ -246,3 +246,26 @@ def subscription_required():
         )
         flash(trans('general_error', default='An error occurred while loading the page'), 'danger')
         return redirect(url_for('general_bp.home'))
+
+@subscribe_bp.route('/status')
+@login_required
+@utils.requires_role(['trader', 'startup', 'admin'])
+def subscription_status():
+    """Render the subscription status page."""
+    try:
+        lang = session.get('lang', 'en')
+        logger.info(
+            f"Rendering subscription status page for user {current_user.id}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        return render_template(
+            'subscribe/subscription_status.html',
+            title=trans('subscribe_status_title', lang=lang, default='Subscription Status')
+        )
+    except Exception as e:
+        logger.error(
+            f"Error rendering subscription status page for user {current_user.id}: {str(e)}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
+        flash(trans('general_error', default='An error occurred while loading the subscription status page'), 'danger')
+        return redirect(url_for('general_bp.home'))
