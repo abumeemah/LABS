@@ -5,8 +5,7 @@ from flask_wtf.csrf import CSRFError
 from wtforms import StringField, TextAreaField, SubmitField, DateField
 from wtforms.validators import DataRequired, Optional, Length
 from bson import ObjectId
-from datetime import datetime, timezone, date
-from zoneinfo import ZoneInfo
+from datetime import datetime, date
 import logging
 import io
 from reportlab.lib.pagesizes import letter
@@ -16,6 +15,16 @@ from helpers.branding_helpers import draw_ficore_pdf_header, ficore_csv_header
 import csv
 import utils
 from translations import trans
+
+# Try to use zoneinfo, fall back to pytz for compatibility
+try:
+    from zoneinfo import ZoneInfo
+    TZ_MODULE = 'zoneinfo'
+    UTC_TZ = ZoneInfo("UTC")
+except ImportError:
+    from pytz import UTC
+    TZ_MODULE = 'pytz'
+    UTC_TZ = UTC
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +50,9 @@ def index():
         # Convert naive datetimes to timezone-aware
         for report in reports:
             if report.get('created_at') and report['created_at'].tzinfo is None:
-                report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+                report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
             if report.get('report_date') and report['report_date'].tzinfo is None:
-                report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+                report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         return render_template(
             'investor_reports/index.html',
@@ -72,9 +81,9 @@ def manage():
         # Convert naive datetimes to timezone-aware
         for report in reports:
             if report.get('created_at') and report['created_at'].tzinfo is None:
-                report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+                report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
             if report.get('report_date') and report['report_date'].tzinfo is None:
-                report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+                report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         return render_template(
             'investor_reports/manage_reports.html',
@@ -104,9 +113,9 @@ def view(id):
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
-            report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
         if report.get('report_date') and report['report_date'].tzinfo is None:
-            report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+            report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         report['_id'] = str(report['_id'])
         report['report_date'] = report['report_date'].isoformat() if report.get('report_date') else None
@@ -141,9 +150,9 @@ def view_page(id):
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
-            report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
         if report.get('report_date') and report['report_date'].tzinfo is None:
-            report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+            report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         return render_template(
             'investor_reports/view.html',
@@ -186,9 +195,9 @@ def generate_report(id):
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
-            report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
         if report.get('report_date') and report['report_date'].tzinfo is None:
-            report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+            report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         # Sanitize inputs for PDF generation
         report['title'] = utils.sanitize_input(report['title'], max_length=100)
@@ -268,9 +277,9 @@ def generate_report_csv(id):
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
-            report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
         if report.get('report_date') and report['report_date'].tzinfo is None:
-            report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+            report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         # Sanitize inputs for CSV generation
         report['title'] = utils.sanitize_input(report['title'], max_length=100)
@@ -332,14 +341,25 @@ def add():
         if form.validate_on_submit():
             try:
                 db = utils.get_mongo_db()
+                # Convert date to datetime with UTC timezone
+                report_date = form.report_date.data
+                if isinstance(report_date, date):
+                    report_date = datetime.combine(report_date, datetime.min.time(), tzinfo=UTC_TZ)
+                else:
+                    logger.warning(
+                        f"Unexpected report_date type: {type(report_date)} for user {current_user.id}",
+                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                    )
+                    report_date = datetime.combine(report_date.date(), datetime.min.time(), tzinfo=UTC_TZ)
+
                 report_data = {
                     'user_id': str(current_user.id),
                     'type': 'investor_report',
                     'title': utils.sanitize_input(form.title.data, max_length=100),
-                    'report_date': datetime.combine(form.report_date.data, datetime.min.time()).replace(tzinfo=ZoneInfo("UTC")),
+                    'report_date': report_date,
                     'summary': utils.sanitize_input(form.summary.data, max_length=1000),
                     'financial_highlights': utils.sanitize_input(form.financial_highlights.data, max_length=1000) if form.financial_highlights.data else None,
-                    'created_at': datetime.now(timezone.utc)
+                    'created_at': datetime.now(UTC_TZ)
                 }
                 db.records.insert_one(report_data)
                 
@@ -392,9 +412,9 @@ def edit(id):
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
-            report['created_at'] = report['created_at'].replace(tzinfo=ZoneInfo("UTC"))
+            report['created_at'] = report['created_at'].replace(tzinfo=UTC_TZ)
         if report.get('report_date') and report['report_date'].tzinfo is None:
-            report['report_date'] = report['report_date'].replace(tzinfo=ZoneInfo("UTC"))
+            report['report_date'] = report['report_date'].replace(tzinfo=UTC_TZ)
         
         form = InvestorReportForm(data={
             'title': report['title'],
@@ -405,12 +425,23 @@ def edit(id):
 
         if form.validate_on_submit():
             try:
+                # Convert date to datetime with UTC timezone
+                report_date = form.report_date.data
+                if isinstance(report_date, date):
+                    report_date = datetime.combine(report_date, datetime.min.time(), tzinfo=UTC_TZ)
+                else:
+                    logger.warning(
+                        f"Unexpected report_date type: {type(report_date)} for user {current_user.id}",
+                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                    )
+                    report_date = datetime.combine(report_date.date(), datetime.min.time(), tzinfo=UTC_TZ)
+
                 updated_record = {
                     'title': utils.sanitize_input(form.title.data, max_length=100),
-                    'report_date': datetime.combine(form.report_date.data, datetime.min.time()).replace(tzinfo=ZoneInfo("UTC")),
+                    'report_date': report_date,
                     'summary': utils.sanitize_input(form.summary.data, max_length=1000),
                     'financial_highlights': utils.sanitize_input(form.financial_highlights.data, max_length=1000) if form.financial_highlights.data else None,
-                    'updated_at': datetime.now(timezone.utc)
+                    'updated_at': datetime.now(UTC_TZ)
                 }
                 db.records.update_one(
                     {'_id': ObjectId(id)},
