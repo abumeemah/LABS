@@ -130,7 +130,7 @@ _STARTUP_TOOLS = [
     },
     {
         "endpoint": "funds.index",
-        "label": "Fund Tracking",
+        "label": "Funds",
         "label_key": "funds_dashboard",
         "description_key": "funds_dashboard_desc",
         "tooltip_key": "funds_tooltip",
@@ -146,20 +146,12 @@ _STARTUP_TOOLS = [
     },
     {
         "endpoint": "investor_reports.index",
-        "label": "Investor Reports",
+        "label": "Reports",
         "label_key": "investor_reports_dashboard",
         "description_key": "investor_reports_dashboard_desc",
         "tooltip_key": "investor_reports_tooltip",
         "icon": "bi-file-earmark-bar-graph"
     },
-    {
-        "endpoint": "reports.index",
-        "label": "Reports",
-        "label_key": "business_reports",
-        "description_key": "business_reports_desc",
-        "tooltip_key": "business_reports_tooltip",
-        "icon": "bi-journal-minus"
-    }
 ]
 
 _TRADER_NAV = [
@@ -201,7 +193,7 @@ _STARTUP_NAV = [
 
     {
         "endpoint": "funds.index",
-        "label": "Fund Tracking",
+        "label": "Funds",
         "label_key": "funds_dashboard",
         "description_key": "funds_dashboard_desc",
         "tooltip_key": "funds_tooltip",
@@ -217,7 +209,7 @@ _STARTUP_NAV = [
     },
     {
         "endpoint": "investor_reports.index",
-        "label": "Investor Reports",
+        "label": "Reports",
         "label_key": "investor_reports_dashboard",
         "description_key": "investor_reports_dashboard_desc",
         "tooltip_key": "investor_reports_tooltip",
@@ -263,7 +255,7 @@ _ADMIN_NAV = [
     },
     {
         "endpoint": "admin.manage_users",
-        "label": "Manage Users",
+        "label": "Users",
         "label_key": "admin_manage_users",
         "description_key": "admin_manage_users_desc",
         "tooltip_key": "admin_manage_users_tooltip",
