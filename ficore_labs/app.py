@@ -176,7 +176,7 @@ def setup_session(app):
         logger.info('Session configured with filesystem fallback', extra={'session_id': 'none', 'user_role': 'none', 'ip_address': 'none'})
 
 class User(UserMixin):
-    def __init__(self, id, email, display_name=None, role='trader', is_trial=True, trial_start=None, trial_end=None, is_subscribed=False):
+    def __init__(self, id, email, display_name=None, role='trader', is_trial=True, trial_start=None, trial_end=None, is_subscribed=False, subscription_plan=None, subscription_start=None, subscription_end=None):
         self.id = id
         self.email = email
         self.display_name = display_name or id
@@ -185,6 +185,9 @@ class User(UserMixin):
         self.trial_start = trial_start or datetime.now(timezone.utc)
         self.trial_end = trial_end or (datetime.now(timezone.utc) + timedelta(days=30))
         self.is_subscribed = is_subscribed
+        self.subscription_plan = subscription_plan
+        self.subscription_start = subscription_start
+        self.subscription_end = subscription_end
 
     def get(self, key, default=None):
         try:
@@ -209,11 +212,16 @@ class User(UserMixin):
         return str(self.id)
 
     def is_trial_active(self):
-        if self.is_subscribed:
-            return True
+        if self.is_subscribed and self.subscription_end:
+            subscription_end_aware = (
+                self.subscription_end.replace(tzinfo=timezone.utc)
+                if self.subscription_end.tzinfo is None
+                else self.subscription_end
+            )
+            return datetime.now(timezone.utc) <= subscription_end_aware
         if self.is_trial and self.trial_end:
             trial_end_aware = (
-                self.trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                self.trial_end.replace(tzinfo=timezone.utc)
                 if self.trial_end.tzinfo is None
                 else self.trial_end
             )
@@ -289,10 +297,16 @@ def create_app():
                     return None
                 trial_start = user.get('trial_start')
                 trial_end = user.get('trial_end')
+                subscription_start = user.get('subscription_start')
+                subscription_end = user.get('subscription_end')
                 if trial_start and trial_start.tzinfo is None:
                     trial_start = trial_start.replace(tzinfo=ZoneInfo("UTC"))
                 if trial_end and trial_end.tzinfo is None:
                     trial_end = trial_end.replace(tzinfo=ZoneInfo("UTC"))
+                if subscription_start and subscription_start.tzinfo is None:
+                    subscription_start = subscription_start.replace(tzinfo=ZoneInfo("UTC"))
+                if subscription_end and subscription_end.tzinfo is None:
+                    subscription_end = subscription_end.replace(tzinfo=ZoneInfo("UTC"))
                 return User(
                     id=user['_id'],
                     email=user['email'],
@@ -301,7 +315,10 @@ def create_app():
                     is_trial=user.get('is_trial', True),
                     trial_start=trial_start,
                     trial_end=trial_end,
-                    is_subscribed=user.get('is_subscribed', False)
+                    is_subscribed=user.get('is_subscribed', False),
+                    subscription_plan=user.get('subscription_plan'),
+                    subscription_start=subscription_start,
+                    subscription_end=subscription_end
                 )
         except Exception as e:
             logger.error(f"Error loading user {user_id}: {str(e)}", extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
@@ -389,6 +406,35 @@ def create_app():
 
     # Register format_date as global
     app.jinja_env.globals['format_date'] = format_date_wrapper
+
+    # Define is_trial_expired global
+    def is_trial_expired(trial_end, is_trial=True, is_subscribed=False, subscription_end=None):
+        try:
+            if is_subscribed and subscription_end:
+                subscription_end_aware = (
+                    subscription_end.replace(tzinfo=timezone.utc)
+                    if subscription_end.tzinfo is None
+                    else subscription_end
+                )
+                return datetime.now(timezone.utc) > subscription_end_aware
+            if is_trial and trial_end:
+                trial_end_aware = (
+                    trial_end.replace(tzinfo=timezone.utc)
+                    if trial_end.tzinfo is None
+                    else trial_end
+                )
+                return datetime.now(timezone.utc) > trial_end_aware
+            return True  # Default to expired if no valid trial or subscription
+        except Exception as e:
+            logger.error(
+                f"Error checking trial expiration: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr}
+            )
+            return True  # Default to expired if there's an error
+
+    # Register is_trial_expired in Jinja globals
+    app.jinja_env.globals['is_trial_expired'] = is_trial_expired
+    logger.info("Registered is_trial_expired Jinja global", extra={'session_id': 'none', 'user_role': 'none', 'ip_address': 'none'})
 
     # Set up Jinja globals
     app.jinja_env.globals.update(
