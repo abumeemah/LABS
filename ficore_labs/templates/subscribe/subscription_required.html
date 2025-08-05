@@ -52,7 +52,7 @@
         <div class="subscription-required-card">
             <h2>{{ t('subscribe_required_title', default='Subscription Required') | e }}</h2>
             <p>
-                {% if current_user.is_trial and not is_trial_expired(current_user.trial_end) %}
+                {% if current_user.is_trial and not is_trial_expired(current_user.trial_end, current_user.is_trial, current_user.is_subscribed, current_user.subscription_end) %}
                     {{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end | format_date }}
                 {% elif current_user.is_trial %}
                     {{ t('subscribe_trial_expired', default='Your trial has expired. Subscribe to continue using all features.') | e }}
