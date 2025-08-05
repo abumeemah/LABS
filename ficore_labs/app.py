@@ -23,8 +23,9 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from users.routes import get_post_login_redirect  # Import the helper function
 from utils import (
-    get_mongo_db, logger, initialize_tools_with_urls,
+    get_mongo_db, logger, initialize_tools_with_urls, generate_tools_with_urls,
     TRADER_TOOLS, TRADER_NAV, STARTUP_TOOLS, STARTUP_NAV, ADMIN_TOOLS, ADMIN_NAV,
+    _TRADER_NAV, _STARTUP_NAV, _ADMIN_NAV, _TRADER_TOOLS, _STARTUP_TOOLS, _ADMIN_TOOLS
 )
 from translations import register_translation, trans, get_translations, get_all_translations, get_module_translations
 
@@ -416,6 +417,28 @@ def create_app():
 
     @app.context_processor
     def inject_globals():
+        def build_nav(nav_template):
+            try:
+                return generate_tools_with_urls(nav_template)
+            except Exception as e:
+                logger.error(f"Error building nav: {e}")
+                return []
+        nav = []
+        tools = []
+        if current_user.is_authenticated:
+            role = getattr(current_user, 'role', None)
+            if role == 'admin':
+                nav = build_nav(_ADMIN_NAV)
+                tools = build_nav(_ADMIN_TOOLS)
+            elif role == 'startup':
+                nav = build_nav(_STARTUP_NAV)
+                tools = build_nav(_STARTUP_TOOLS)
+            elif role == 'trader':
+                nav = build_nav(_TRADER_NAV)
+                tools = build_nav(_TRADER_TOOLS)
+            else:
+                nav = build_nav(_TRADER_NAV)
+                tools = build_nav(_TRADER_TOOLS)
         return {
             'current_year': datetime.now(timezone.utc).year,
             'current_lang': session.get('lang', 'en'),
@@ -424,18 +447,8 @@ def create_app():
                 {'code': 'en', 'name': 'English'},
                 {'code': 'ha', 'name': 'Hausa'}
             ],
-            'navigation': (
-                ADMIN_NAV if current_user.is_authenticated and current_user.role == 'admin'
-                else STARTUP_NAV if current_user.is_authenticated and current_user.role == 'startup'
-                else TRADER_NAV if current_user.is_authenticated and current_user.role == 'trader'
-                else []
-            ),
-            'tools': (
-                ADMIN_TOOLS if current_user.is_authenticated and current_user.role == 'admin'
-                else STARTUP_TOOLS if current_user.is_authenticated and current_user.role == 'startup'
-                else TRADER_TOOLS if current_user.is_authenticated and current_user.role == 'trader'
-                else []
-            )
+            'navigation': nav,
+            'tools': tools,
         }
 
     # Routes
@@ -551,7 +564,7 @@ def create_app():
         if current_user.is_authenticated:
             session['last_activity'] = datetime.now(timezone.utc).isoformat()
             session.modified = True
-            
+
     return app
 
 app = create_app()
