@@ -34,7 +34,7 @@
                 <div class="profile-text-center">
                     {% if current_user.is_subscribed %}
                         <p class="profile-text profile-text-success">
-                            {{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') | e }}{{ format_date(current_user.subscription_end, lang=lang, format_type='long') | e }}
+                            {{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') | e }}{{ current_user.subscription_end | format_date | e }}
                         </p>
                         <p class="profile-text">
                             {{ t('subscribe_plan', default='Plan') | e }}: {{ current_user.subscription_plan|capitalize | e }}
@@ -44,7 +44,7 @@
                         </p>
                     {% elif current_user.is_trial and current_user.is_trial_active %}
                         <p class="profile-text">
-                            {{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ format_date(current_user.trial_end, lang=lang, format_type='long') | e }}
+                            {{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end | format_date | e }}
                         </p>
                         <p class="profile-text profile-text-warning">
                             {{ t('subscribe_trial_encouragement', default='Enjoying FiCore? Subscribe now to continue accessing all features after your trial ends!') | e }}
