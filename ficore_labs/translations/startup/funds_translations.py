@@ -4,12 +4,12 @@ Funds management translations for accounting tools
 
 FUNDS_TRANSLATIONS = {
     'en': {
-        'funds_title': 'Fund Tracking',
+        'funds_title': 'Funds',
         'funds_subtitle': 'Track Your Capital Inflows',
         'funds_create_title': 'Add New Fund',
         'funds_manage': 'Manage Funds',
         'funds_details': 'Fund Details',
-        'funds_dashboard': 'Funds Dashboard',
+        'funds_dashboard': 'Funds',
         'funds_dashboard_desc': 'Monitor your cash flow and funding activities.',
         'funds_source': 'Funding Source',
         'funds_amount': 'Amount',
