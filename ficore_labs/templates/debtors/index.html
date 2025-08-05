@@ -21,9 +21,9 @@
             <table class="table table-striped table-bordered">
                 <thead class="table-dark">
                     <tr>
-                        <th>{{ t('general_name', default='Name') }}</th>
+                        <th>{{ t('debtors_debtor_name', default="Debtor's Name") }}</th>
                         <th>{{ t('general_amount', default='Amount') }}</th>
-                        <th>{{ t('general_contact', default='Contact') }}</th>
+                        <th>{{ t('debtors_phone_number', default="Debtor's Phone Number") }}</th>
                         <th>{{ t('general_created_at', default='Created At') }}</th>
                         <th>{{ t('debtors_reminders', default='Reminders') }}</th>
                         <th>{{ t('general_actions', default='Actions') }}</th>
@@ -32,9 +32,9 @@
                 <tbody>
                     {% for debtor in debtors %}
                         <tr>
-                            <td data-label="{{ t('general_name', default='Name') }}">{{ debtor.name }}</td>
+                            <td data-label="{{ t('debtors_debtor_name', default='Name') }}">{{ debtor.name }}</td>
                             <td data-label="{{ t('general_amount', default='Amount') }}">{{ format_currency(debtor.amount_owed) }}</td>
-                            <td data-label="{{ t('general_contact', default='Contact') }}">{{ debtor.contact or '-' }}</td>
+                            <td data-label="{{ t('debtors_phone_number', default='Phone Number') }}">{{ debtor.phone_number or '-' }}</td>
                             <td data-label="{{ t('general_created_at', default='Created At') }}">{{ format_date(debtor.created_at) }}</td>
                             <td data-label="{{ t('debtors_reminders', default='Reminders') }}">{{ debtor.get('reminder_count', 0) }}</td>
                             <td data-label="{{ t('general_actions', default='Actions') }}">
@@ -44,7 +44,7 @@
                                         data-id="{{ debtor._id }}"
                                         data-name="{{ debtor.name }}"
                                         data-amount="{{ debtor.amount_owed }}"
-                                        data-contact="{{ debtor.contact or '' }}"
+                                        data-contact="{{ debtor.phone_number or '' }}"
                                         data-date="{{ format_date(debtor.created_at) }}"
                                         data-reminders="{{ debtor.get('reminder_count', 0) }}"
                                         data-description="{{ debtor.description or '' }}"
@@ -76,12 +76,12 @@
             <div class="modal-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <p><strong>{{ t('general_name', default='Name') }}:</strong> <span id="modalName"></span></p>
+                        <p><strong>{{ t('debtors_debtor_name', default="Debtor's Name") }}:</strong> <span id="modalName"></span></p>
                         <p><strong>{{ t('general_amount', default='Amount') }}:</strong> <span id="modalAmount"></span></p>
-                        <p><strong>{{ t('general_contact', default='Contact') }}:</strong> <span id="modalContact"></span></p>
+                        <p><strong>{{ t('debtors_phone_number', default="Debtor's Phone Number") }}:</strong> <span id="modalContact"></span></p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>{{ t('general_description', default='Description') }}:</strong> <span id="modalDescription"></span></p>
+                        <p><strong>{{ t('debtors_description', default='Description of Transaction') }}:</strong> <span id="modalDescription"></span></p>
                         <p><strong>{{ t('general_date', default='Date') }}:</strong> <span id="modalDate"></span></p>
                         <p><strong>{{ t('debtors_reminders', default='Reminders') }}:</strong> <span id="modalReminders"></span></p>
                     </div>
