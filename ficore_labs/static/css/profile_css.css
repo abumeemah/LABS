@@ -126,6 +126,18 @@
     font-size: 1.1rem;
 }
 
+/* Specific styling for subscription status button */
+.profile-subscription-status-btn {
+    border: 1px solid var(--accent-blue);
+    color: var(--accent-blue);
+    background: transparent;
+}
+
+.profile-subscription-status-btn:hover {
+    background: var(--button-secondary-hover);
+    color: var(--text-color);
+}
+
 .profile-btn-outline-primary {
     border: 1px solid var(--accent-blue);
     color: var(--accent-blue);
@@ -178,6 +190,14 @@
 .profile-text-danger {
     color: var(--danger);
     margin-top: 0.25rem;
+}
+
+.profile-text-success {
+    color: var(--success);
+}
+
+.profile-text-warning {
+    color: var(--warning);
 }
 
 /* Form styling */
