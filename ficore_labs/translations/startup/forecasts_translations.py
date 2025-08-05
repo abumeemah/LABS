@@ -1,8 +1,8 @@
 FORECASTS_TRANSLATIONS = {
     'en': {
         'forecasts_index': 'Forecasts',
-        'forecasts_title': 'Title',
-        'forecasts_subtitle': 'Plan Your Financial Future',
+        'forecasts_title': 'Your Business Forecasts',
+        'forecasts_subtitle': 'Kudin Masu Zuwa Bisa Hangen Nesa',
         'forecasts_create_title': 'Add New Forecast',
         'forecasts_manage': 'Manage Forecasts',
         'forecasts_details': 'Forecast Details',
