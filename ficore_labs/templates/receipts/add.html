@@ -4,7 +4,7 @@
 <div class="container mt-5">
     <div class="page-title">
         <h1>{{ t('receipts_add_title', default='Add Money In') }}</h1>
-        <small class="subtext">{{ t('receipts_subtitle', default='Kuɗin Da Aka Biyaka') }}</small>
+        <small class="subtext">{{ t('receipts_subtitle', default='Record a Sale') }}</small>
     </div>
     {% if not can_interact %}
         <div class="alert alert-warning" role="alert">
@@ -25,7 +25,7 @@
         <div class="col-12">
             <label for="date" class="form-label">{{ t('general_date', default='Date') }}</label>
             {{ form.date(class="form-control", type="date", required=True, disabled=not can_interact) }}
-            {% if form.date.errors %}
+            {% if form.party_name.errors %}
                 <p class="text-danger mt-1">{{ form.date.errors[0] }}</p>
             {% endif %}
         </div>
