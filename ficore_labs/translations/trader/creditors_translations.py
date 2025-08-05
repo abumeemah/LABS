@@ -1,6 +1,6 @@
 CREDITORS_TRANSLATIONS = {
     'en': {
-        'creditors_dashboard': 'I Owe',
+        'creditors_dashboard': 'Vendors',
         'creditors_dashboard_desc': 'Keep track of money you owe to others.',
         'creditors_tooltip': 'Manage your debts to creditors.',
         'creditors_list': 'Creditors List',
