@@ -32,10 +32,11 @@ def send_whatsapp_reminder(recipient, message):
     return True, {'status': 'WhatsApp sent successfully'}  # Replace with actual API call
 
 class DebtorForm(FlaskForm):
-    name = StringField(trans('debtors_debtor_name', default='Debtor Name'), validators=[DataRequired()])
-    contact = StringField(trans('general_contact', default='Contact'), validators=[Optional()])
+    name = StringField(trans('debtors_debtor_name', default="Debtor's Name"), validators=[DataRequired()])
+    phone_number = StringField(trans('debtors_phone_number', default="Debtor's Phone Number"), validators=[DataRequired()])
+    email = StringField(trans('debtors_email', default='Email'), validators=[Optional()])
     amount_owed = FloatField(trans('debtors_amount_owed', default='Amount Owed'), validators=[DataRequired()])
-    description = TextAreaField(trans('general_description', default='Description'), validators=[Optional()])
+    description = TextAreaField(trans('debtors_description', default='Description of Transaction'), validators=[Optional()])
     submit = SubmitField(trans('debtors_add_debtor', default='Add Debtor'))
 
 debtors_bp = Blueprint('debtors', __name__, url_prefix='/debtors')
@@ -189,14 +190,14 @@ def share(id):
         debtor = db.records.find_one(query)
         if not debtor:
             return jsonify({'success': False, 'message': trans('debtors_record_not_found', default='Record not found')}), 404
-        if not debtor.get('contact'):
+        if not debtor.get('phone_number'):
             return jsonify({'success': False, 'message': trans('debtors_no_contact', default='No contact provided for sharing')}), 400
         
         # Convert naive datetimes to timezone-aware
         if debtor.get('created_at') and debtor['created_at'].tzinfo is None:
             debtor['created_at'] = debtor['created_at'].replace(tzinfo=ZoneInfo("UTC"))
         
-        contact = re.sub(r'\D', '', debtor['contact'])
+        contact = re.sub(r'\D', '', debtor['phone_number'])
         if contact.startswith('0'):
             contact = '234' + contact[1:]
         elif not contact.startswith('+'):
@@ -313,7 +314,8 @@ def generate_iou(id):
         # Sanitize inputs for PDF generation
         debtor['name'] = utils.sanitize_input(debtor['name'], max_length=100)
         debtor['description'] = utils.sanitize_input(debtor.get('description', 'No description provided'), max_length=500)
-        debtor['contact'] = utils.sanitize_input(debtor.get('contact', 'N/A'), max_length=50)
+        debtor['phone_number'] = utils.sanitize_input(debtor.get('phone_number', 'N/A'), max_length=50)
+        debtor['email'] = utils.sanitize_input(debtor.get('email', 'N/A'), max_length=100)
         
         buffer = io.BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -329,13 +331,15 @@ def generate_iou(id):
         
         p.setFont("Helvetica", 12)
         y_position = title_y - 0.5
-        p.drawString(inch, y_position * inch, f"{trans('general_name', default='Debtor')}: {debtor['name']}")
+        p.drawString(inch, y_position * inch, f"{trans('debtors_debtor_name', default='Debtor')}: {debtor['name']}")
         y_position -= 0.3
         p.drawString(inch, y_position * inch, f"{trans('debtors_amount_owed', default='Amount Owed')}: {utils.format_currency(debtor['amount_owed'])}")
         y_position -= 0.3
-        p.drawString(inch, y_position * inch, f"{trans('general_contact', default='Contact')}: {debtor['contact']}")
+        p.drawString(inch, y_position * inch, f"{trans('debtors_phone_number', default='Phone Number')}: {debtor['phone_number']}")
         y_position -= 0.3
-        p.drawString(inch, y_position * inch, f"{trans('general_description', default='Description')}: {debtor['description']}")
+        p.drawString(inch, y_position * inch, f"{trans('debtors_email', default='Email')}: {debtor['email']}")
+        y_position -= 0.3
+        p.drawString(inch, y_position * inch, f"{trans('debtors_description', default='Description of Transaction')}: {debtor['description']}")
         y_position -= 0.3
         p.drawString(inch, y_position * inch, f"{trans('debtors_date_recorded', default='Date Recorded')}: {utils.format_date(debtor['created_at'])}")
         y_position -= 0.3
@@ -392,16 +396,18 @@ def generate_iou_csv(id):
         # Sanitize inputs for CSV generation
         debtor['name'] = utils.sanitize_input(debtor['name'], max_length=100)
         debtor['description'] = utils.sanitize_input(debtor.get('description', 'No description provided'), max_length=500)
-        debtor['contact'] = utils.sanitize_input(debtor.get('contact', 'N/A'), max_length=50)
+        debtor['phone_number'] = utils.sanitize_input(debtor.get('phone_number', 'N/A'), max_length=50)
+        debtor['email'] = utils.sanitize_input(debtor.get('email', 'N/A'), max_length=100)
         
         output = []
         output.extend(ficore_csv_header(current_user))
         output.append([trans('debtors_iou_title', default='FiCore Records - IOU')])
         output.append([''])
-        output.append([trans('general_name', default='Debtor'), debtor['name']])
+        output.append([trans('debtors_debtor_name', default='Debtor'), debtor['name']])
         output.append([trans('debtors_amount_owed', default='Amount Owed'), utils.format_currency(debtor['amount_owed'])])
-        output.append([trans('general_contact', default='Contact'), debtor['contact']])
-        output.append([trans('general_description', default='Description'), debtor['description']])
+        output.append([trans('debtors_phone_number', default='Phone Number'), debtor['phone_number']])
+        output.append([trans('debtors_email', default='Email'), debtor['email']])
+        output.append([trans('debtors_description', default='Description of Transaction'), debtor['description']])
         output.append([trans('debtors_date_recorded', default='Date Recorded'), utils.format_date(debtor['created_at'])])
         output.append([trans('debtors_reminders_sent', default='Reminders Sent'), debtor.get('reminder_count', 0)])
         output.append([''])
@@ -446,7 +452,8 @@ def add():
                 'user_id': str(current_user.id),
                 'type': 'debtor',
                 'name': utils.sanitize_input(form.name.data, max_length=100),
-                'contact': utils.sanitize_input(form.contact.data, max_length=50) if form.contact.data else None,
+                'phone_number': utils.sanitize_input(form.phone_number.data, max_length=50),
+                'email': utils.sanitize_input(form.email.data, max_length=100) if form.email.data else None,
                 'amount_owed': utils.clean_currency(form.amount_owed.data),
                 'description': utils.sanitize_input(form.description.data, max_length=500) if form.description.data else None,
                 'created_at': datetime.now(timezone.utc),
@@ -489,7 +496,8 @@ def edit(id):
         
         form = DebtorForm(data={
             'name': debtor['name'],
-            'contact': debtor.get('contact', ''),
+            'phone_number': debtor.get('phone_number', ''),
+            'email': debtor.get('email', ''),
             'amount_owed': debtor['amount_owed'],
             'description': debtor.get('description', '')
         })
@@ -503,7 +511,8 @@ def edit(id):
             try:
                 updated_record = {
                     'name': utils.sanitize_input(form.name.data, max_length=100),
-                    'contact': utils.sanitize_input(form.contact.data, max_length=50) if form.contact.data else None,
+                    'phone_number': utils.sanitize_input(form.phone_number.data, max_length=50),
+                    'email': utils.sanitize_input(form.email.data, max_length=100) if form.email.data else None,
                     'amount_owed': utils.clean_currency(form.amount_owed.data),
                     'description': utils.sanitize_input(form.description.data, max_length=500) if form.description.data else None,
                     'updated_at': datetime.now(timezone.utc)
