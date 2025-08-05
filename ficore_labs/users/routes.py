@@ -717,8 +717,6 @@ def logout():
                 logger.error(f"Failed to delete MongoDB session for SID {sid}: {str(e)}")
         session.clear()
         session['lang'] = lang
-        utils.create_anonymous_session()
-        logger.info(f"New anonymous session created after logout: {session['sid']}")
         log_audit_action('logout', {'user_id': user_id, 'session_id': sid})
         logger.info(f"User {user_id} logged out successfully. After logout - Session: {dict(session)}, Authenticated: {current_user.is_authenticated}")
         response = make_response(redirect(url_for('general_bp.landing')))
@@ -726,6 +724,7 @@ def logout():
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         response.set_cookie(current_app.config['SESSION_COOKIE_NAME'], '', expires=0, httponly=True, secure=current_app.config.get('SESSION_COOKIE_SECURE', True))
+        response.set_cookie('remember_token', '', expires=0, httponly=True, secure=current_app.config.get('SESSION_COOKIE_SECURE', True))
         flash(trans('general_logged_out', default='Logged out successfully'), 'success')
         return response
     except Exception as e:
@@ -736,5 +735,5 @@ def logout():
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         response.set_cookie(current_app.config['SESSION_COOKIE_NAME'], '', expires=0, httponly=True, secure=current_app.config.get('SESSION_COOKIE_SECURE', True))
+        response.set_cookie('remember_token', '', expires=0, httponly=True, secure=current_app.config.get('SESSION_COOKIE_SECURE', True))
         return response
-
