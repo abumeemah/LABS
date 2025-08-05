@@ -5,7 +5,7 @@ from flask_wtf.file import FileAllowed
 from flask_wtf.csrf import CSRFError
 from translations import trans
 from utils import requires_role, is_valid_email, format_currency, get_mongo_db, sanitize_input
-from models import User, get_user, update_user, create_kyc_record, update_kyc_record, get_kyc_record, to_dict_kyc_record
+from models import User, get_user, update_user, create_kyc_record, update_kyc_record, get_kyc_record, to_dict_kyc_record, to_dict_user
 from bson import ObjectId
 from datetime import datetime, timezone
 from wtforms import StringField, TextAreaField, SubmitField, FileField
@@ -108,7 +108,9 @@ def profile():
                 f"User {user_id} not found",
                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
             )
-            flash(trans('general_user_not_found', default='User not found'), 'danger')
+            flash(trans
+
+('general_user_not_found', default='User not found'), 'danger')
             return redirect(url_for('general_bp.home'))
 
         form = ProfileForm()
@@ -116,11 +118,11 @@ def profile():
             form.full_name.data = user.display_name
             form.email.data = user.email
             form.phone.data = user.phone
-            if user.role in ['trader', 'startup'] and user.settings.get('business_details'):
-                form.business_name.data = user.settings.get('business_details', {}).get('name', '')
-                form.business_address.data = user.settings.get('business_details', {}).get('address', '')
-                form.industry.data = user.settings.get('business_details', {}).get('industry', '')
-                form.products_services.data = user.settings.get('business_details', {}).get('products_services', '')
+            if user.role in ['trader', 'startup'] and user.business_details:
+                form.business_name.data = user.business_details.get('name', '')
+                form.business_address.data = user.business_details.get('address', '')
+                form.industry.data = user.business_details.get('industry', '')
+                form.products_services.data = user.business_details.get('products_services', '')
 
         if form.validate_on_submit():
             try:
