@@ -415,6 +415,14 @@ def create_app():
             logger.warning(f'Error formatting datetime {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
             return str(value)
 
+    @app.template_filter('format_date')
+    def format_date(value):
+        try:
+            return format_date(value, lang=session.get('lang', 'en'), format_type='short')
+        except Exception as e:
+            logger.warning(f'Error formatting date {value}: {str(e)}', extra={'session_id': session.get('sid', 'no-session-id'), 'ip_address': request.remote_addr})
+            return str(value)
+
     @app.context_processor
     def inject_globals():
         def build_nav(nav_template):
