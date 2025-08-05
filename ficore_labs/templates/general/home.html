@@ -38,7 +38,7 @@
             <div class="net-position-card">
                 <div class="net-position-info">
                     <span class="net-label fw-bold">{{ t('general_net_position', default='Net Position') | e }}:</span>
-                    <span class="net-amount" id="netPosition">₦{{ format_currency(total_i_am_owed - total_i_owe) }}</span>
+                    <span class="net-amount" id="netPosition" data-amount="{{ total_i_am_owed - total_i_owe }}">₦{{ format_currency(total_i_am_owed - total_i_owe) }}</span>
                     <span class="net-status" id="netStatus">({{ t('general_balanced', default='Balanced') if (total_i_am_owed - total_i_owe) == 0 else t('general_owed_to_you', default='Owed to you') if (total_i_am_owed - total_i_owe) > 0 else t('general_you_owe', default='You owe') | e }})</span>
                 </div>
                 <a href="{{ url_for('business.view_data') | e }}" class="btn btn-primary btn-sm" aria-label="{{ t('general_details', default='Details') | e }}">
@@ -62,7 +62,7 @@
                     </div>
                     <div class="snapshot-info">
                         <div class="snapshot-label fw-bold">{{ t('general_net_cashflow_mtd', default='Net Cashflow (MTD)') | e }}</div>
-                        <div class="stat-card-value" id="netCashflow">₦{{ format_currency(net_cashflow) }}</div>
+                        <div class="stat-card-value" id="netCashflow" data-original-amount="{{ net_cashflow }}">₦{{ format_currency(net_cashflow) }}</div>
                     </div>
                 </div>
                 <div class="stat-card receipts">
@@ -71,7 +71,7 @@
                     </div>
                     <div class="snapshot-info">
                         <div class="snapshot-label fw-bold">{{ t('general_receipts_mtd', default='Receipts (MTD)') | e }}</div>
-                        <div class="stat-card-value" id="totalReceipts">₦{{ format_currency(total_receipts) }}</div>
+                        <div class="stat-card-value" id="totalReceipts" data-original-amount="{{ total_receipts }}">₦{{ format_currency(total_receipts) }}</div>
                     </div>
                 </div>
                 <div class="stat-card payments">
@@ -80,7 +80,7 @@
                     </div>
                     <div class="snapshot-info">
                         <div class="snapshot-label fw-bold">{{ t('general_payments_mtd', default='Payments (MTD)') | e }}</div>
-                        <div class="stat-card-value" id="totalPayments">₦{{ format_currency(total_payments) }}</div>
+                        <div class="stat-card-value" id="totalPayments" data-original-amount="{{ total_payments }}">₦{{ format_currency(total_payments) }}</div>
                     </div>
                 </div>
             </div>
@@ -233,11 +233,34 @@ const translations = {
 // Load financial data
 function loadFinancialSummary() {
     Promise.all([
-        fetch('{{ url_for("business.debt_summary") | e }}').then(r => r.json()).catch(() => ({totalIOwe: 0, totalIAmOwed: 0})),
-        fetch('{{ url_for("business.cashflow_summary") | e }}').then(r => r.json()).catch(() => ({netCashflow: 0, totalReceipts: 0, totalPayments: 0}))
+        fetch('{{ url_for("business.debt_summary") | e }}', { credentials: 'include' })
+            .then(r => {
+                if (!r.ok) throw new Error('Debt summary fetch failed: ' + r.status);
+                return r.json();
+            })
+            .catch(error => {
+                console.error('Debt summary fetch error:', error);
+                return { totalIOwe: 0, totalIAmOwed: 0 };
+            }),
+        fetch('{{ url_for("business.cashflow_summary") | e }}', { credentials: 'include' })
+            .then(r => {
+                if (!r.ok) throw new Error('Cashflow summary fetch failed: ' + r.status);
+                return r.json();
+            })
+            .catch(error => {
+                console.error('Cashflow summary fetch error:', error);
+                // Preserve server-side values
+                return null;
+            })
     ]).then(([debtData, cashflowData]) => {
+        console.log('Debt summary data:', debtData);
+        console.log('Cashflow summary data:', cashflowData);
         updateDebtSummary(debtData);
-        updateCashflowSummary(cashflowData);
+        if (cashflowData && 'totalPayments' in cashflowData && !isNaN(cashflowData.totalPayments)) {
+            updateCashflowSummary(cashflowData);
+        } else {
+            console.warn('Skipping cashflow update due to invalid or missing data');
+        }
     }).catch(error => {
         console.error('Error loading financial data:', error);
     });
@@ -245,10 +268,13 @@ function loadFinancialSummary() {
 
 // Load recent activity
 function loadRecentActivity() {
-    fetch('{{ url_for("business.recent_activity") | e }}')
-        .then(response => response.json())
+    fetch('{{ url_for("business.recent_activity") | e }}', { credentials: 'include' })
+        .then(response => {
+            if (!response.ok) throw new Error('Recent activity fetch failed: ' + response.status);
+            return response.json();
+        })
         .then(activities => {
-            allActivities = activities; // Store all activities
+            allActivities = activities;
             renderRecentActivities(isShowingAllActivities ? activities : activities.slice(0, 2));
             updateViewAllLink();
         }).catch(error => {
@@ -338,12 +364,13 @@ function updateDebtSummary(data) {
 }
 
 function updateCashflowSummary(data) {
-    document.getElementById('netCashflow').textContent = '₦' + format_currency(data.netCashflow || 0);
-    document.getElementById('netCashflow').dataset.originalText = '₦' + format_currency(data.netCashflow || 0);
-    document.getElementById('totalReceipts').textContent = '₦' + format_currency(data.totalReceipts || 0);
-    document.getElementById('totalReceipts').dataset.originalText = '₦' + format_currency(data.totalReceipts || 0);
-    document.getElementById('totalPayments').textContent = '₦' + format_currency(data.totalPayments || 0);
-    document.getElementById('totalPayments').dataset.originalText = '₦' + format_currency(data.totalPayments || 0);
+    console.log('Updating cashflow summary with:', data);
+    document.getElementById('netCashflow').textContent = '₦' + format_currency(data.netCashflow || document.getElementById('netCashflow').dataset.originalAmount);
+    document.getElementById('netCashflow').dataset.originalText = '₦' + format_currency(data.netCashflow || document.getElementById('netCashflow').dataset.originalAmount);
+    document.getElementById('totalReceipts').textContent = '₦' + format_currency(data.totalReceipts || document.getElementById('totalReceipts').dataset.originalAmount);
+    document.getElementById('totalReceipts').dataset.originalText = '₦' + format_currency(data.totalReceipts || document.getElementById('totalReceipts').dataset.originalAmount);
+    document.getElementById('totalPayments').textContent = '₦' + format_currency(data.totalPayments || document.getElementById('totalPayments').dataset.originalAmount);
+    document.getElementById('totalPayments').dataset.originalText = '₦' + format_currency(data.totalPayments || document.getElementById('totalPayments').dataset.originalAmount);
 }
 
 function getActivityIcon(type) {
