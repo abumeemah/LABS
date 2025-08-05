@@ -4,11 +4,11 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, FloatField, SelectField, SubmitField, DateField, validators
-from wtforms.validators import DataRequired, NumberRange, ValidationError
+from wtforms.validators import DataRequired, NumberRange
 from translations import trans
 import utils
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo  # Added ZoneInfo import
+from zoneinfo import ZoneInfo
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
@@ -19,6 +19,15 @@ from models import get_records, get_cashflows, get_feedback, to_dict_feedback
 logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint('admin', __name__, template_folder='templates/admin')
+
+# Error Handler
+@admin_bp.app_errorhandler(500)
+def error_500(error):
+    """Handle 500 Internal Server Error."""
+    logger.error(f"500 Internal Server Error: {str(error)}",
+                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id if current_user.is_authenticated else 'anonymous'})
+    flash(trans('admin_server_error', default='An unexpected error occurred. Please try again later.'), 'danger')
+    return render_template('error/500.html'), 500
 
 # Form Definitions
 class RoleForm(FlaskForm):
@@ -74,7 +83,7 @@ def log_audit_action(action, details=None):
             'admin_id': str(current_user.id),
             'action': action,
             'details': details or {},
-            'timestamp': datetime.now(timezone.utc)  # Updated to timezone-aware
+            'timestamp': datetime.now(timezone.utc)
         })
     except Exception as e:
         logger.error(f"Error logging audit action '{action}': {str(e)}",
@@ -89,6 +98,8 @@ def dashboard():
     """Admin dashboard with system statistics."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         stats = {
             'users': db.users.count_documents({}),
             'records': db.records.count_documents({}),
@@ -103,13 +114,13 @@ def dashboard():
         for user in recent_users:
             user['_id'] = str(user['_id'])
             trial_end = user.get('trial_end')
-            subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+            subscription_end = user.get('subscription_end')
             # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
-            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
-                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
-                else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
             )
         logger.info(f"Admin {current_user.id} accessed dashboard",
                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
@@ -123,7 +134,7 @@ def dashboard():
         logger.error(f"Error loading admin dashboard for user {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_dashboard_error', default='An error occurred while loading the dashboard'), 'danger')
-        return redirect(url_for('error/500.html'))
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/users', methods=['GET'])
 @login_required
@@ -133,25 +144,27 @@ def manage_users():
     """View and manage users."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         users = list(db.users.find({} if utils.is_admin() else {'role': {'$ne': 'admin'}}).sort('created_at', -1))
         for user in users:
             user['_id'] = str(user['_id'])
             user['username'] = user['_id']
             trial_end = user.get('trial_end')
-            subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
+            subscription_end = user.get('subscription_end')
             # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
-            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
-                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
-                else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
             )
         return render_template('admin/users.html', users=users, title=trans('admin_manage_users_title', default='Manage Users'))
     except Exception as e:
         logger.error(f"Error fetching users for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/users.html', users=[]), 500
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/users/suspend/<user_id>', methods=['POST'])
 @login_required
@@ -162,14 +175,16 @@ def suspend_user(user_id):
     try:
         ObjectId(user_id)  # Validate user_id format
         db = utils.get_mongo_db()
-        user_query = {'_id': user_id}
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        user_query = {'_id': ObjectId(user_id)}
         user = db.users.find_one(user_query)
         if not user:
             flash(trans('admin_user_not_found', default='User not found'), 'danger')
             return redirect(url_for('admin.manage_users'))
         result = db.users.update_one(
             user_query,
-            {'$set': {'suspended': True, 'updated_at': datetime.now(timezone.utc)}}  # Updated to timezone-aware
+            {'$set': {'suspended': True, 'updated_at': datetime.now(timezone.utc)}}
         )
         if result.modified_count == 0:
             flash(trans('admin_user_not_updated', default='User could not be suspended'), 'danger')
@@ -188,7 +203,7 @@ def suspend_user(user_id):
         logger.error(f"Error suspending user {user_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return redirect(url_for('admin.manage_users'))
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/users/delete/<user_id>', methods=['POST'])
 @login_required
@@ -199,7 +214,9 @@ def delete_user(user_id):
     try:
         ObjectId(user_id)  # Validate user_id format
         db = utils.get_mongo_db()
-        user_query = {'_id': user_id}
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        user_query = {'_id': ObjectId(user_id)}
         user = db.users.find_one(user_query)
         if not user:
             flash(trans('admin_user_not_found', default='User not found'), 'danger')
@@ -229,7 +246,7 @@ def delete_user(user_id):
         logger.error(f"Error deleting user {user_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return redirect(url_for('admin.manage_users'))
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/data/delete/<collection>/<item_id>', methods=['POST'])
 @login_required
@@ -244,6 +261,8 @@ def delete_item(collection, item_id):
     try:
         ObjectId(item_id)  # Validate item_id format
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         result = db[collection].delete_one({'_id': ObjectId(item_id)})
         if result.deleted_count == 0:
             flash(trans('admin_item_not_found', default='Item not found'), 'danger')
@@ -262,7 +281,7 @@ def delete_item(collection, item_id):
         logger.error(f"Error deleting {collection} item {item_id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return redirect(url_for('admin.dashboard'))
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/users/roles', methods=['GET', 'POST'])
 @login_required
@@ -270,50 +289,58 @@ def delete_item(collection, item_id):
 @utils.limiter.limit("50 per hour")
 def manage_user_roles():
     """Manage user roles: list all users and update their roles."""
-    db = utils.get_mongo_db()
-    users = list(db.users.find())
-    form = RoleForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        user_id = request.form.get('user_id')
-        try:
-            ObjectId(user_id)  # Validate user_id format
-            user = db.users.find_one({'_id': user_id})
-            if not user:
-                flash(trans('user_not_found', default='User not found'), 'danger')
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        users = list(db.users.find())
+        form = RoleForm()
+        if request.method == 'POST' and form.validate_on_submit():
+            user_id = request.form.get('user_id')
+            try:
+                ObjectId(user_id)  # Validate user_id format
+                user = db.users.find_one({'_id': ObjectId(user_id)})
+                if not user:
+                    flash(trans('user_not_found', default='User not found'), 'danger')
+                    return redirect(url_for('admin.manage_user_roles'))
+                new_role = form.role.data
+                db.users.update_one(
+                    {'_id': ObjectId(user_id)},
+                    {'$set': {'role': new_role, 'updated_at': datetime.now(timezone.utc)}}
+                )
+                logger.info(f"User role updated: id={user_id}, new_role={new_role}, admin={current_user.id}",
+                            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                log_audit_action('update_user_role', {'user_id': user_id, 'new_role': new_role})
+                flash(trans('user_role_updated', default='User role updated successfully'), 'success')
                 return redirect(url_for('admin.manage_user_roles'))
-            new_role = form.role.data
-            db.users.update_one(
-                {'_id': user_id},
-                {'$set': {'role': new_role, 'updated_at': datetime.now(timezone.utc)}}  # Updated to timezone-aware
+            except errors.InvalidId:
+                logger.error(f"Invalid user_id format: {user_id}",
+                             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
+                return redirect(url_for('admin.manage_user_roles'))
+            except Exception as e:
+                logger.error(f"Error updating user role {user_id}: {str(e)}",
+                             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+                return render_template('admin/user_roles.html', form=form, users=users, title=trans('admin_manage_user_roles_title', default='Manage User Roles'))
+        
+        for user in users:
+            user['_id'] = str(user['_id'])
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end')
+            # Convert naive datetimes to timezone-aware
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
             )
-            logger.info(f"User role updated: id={user_id}, new_role={new_role}, admin={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('update_user_role', {'user_id': user_id, 'new_role': new_role})
-            flash(trans('user_role_updated', default='User role updated successfully'), 'success')
-            return redirect(url_for('admin.manage_user_roles'))
-        except errors.InvalidId:
-            logger.error(f"Invalid user_id format: {user_id}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
-            return redirect(url_for('admin.manage_user_roles'))
-        except Exception as e:
-            logger.error(f"Error updating user role {user_id}: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/user_roles.html', form=form, users=users, title=trans('admin_manage_user_roles_title', default='Manage User Roles'))
-    
-    for user in users:
-        user['_id'] = str(user['_id'])
-        trial_end = user.get('trial_end')
-        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
-        # Convert naive datetimes to timezone-aware
-        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
-        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
-        user['is_trial_active'] = (
-            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
-            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
-        )
-    return render_template('admin/user_roles.html', form=form, users=users, title=trans('admin_manage_user_roles_title', default='Manage User Roles'))
+        return render_template('admin/user_roles.html', form=form, users=users, title=trans('admin_manage_user_roles_title', default='Manage User Roles'))
+    except Exception as e:
+        logger.error(f"Error in manage_user_roles for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/users/subscriptions', methods=['GET', 'POST'])
 @login_required
@@ -321,60 +348,68 @@ def manage_user_roles():
 @utils.limiter.limit("50 per hour")
 def manage_user_subscriptions():
     """Manage user subscriptions: list all users and update their subscription status."""
-    db = utils.get_mongo_db()
-    users = list(db.users.find())
-    form = SubscriptionForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        user_id = request.form.get('user_id')
-        try:
-            ObjectId(user_id)  # Validate user_id format
-            user = db.users.find_one({'_id': user_id})
-            if not user:
-                flash(trans('user_not_found', default='User not found'), 'danger')
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        users = list(db.users.find())
+        form = SubscriptionForm()
+        if request.method == 'POST' and form.validate_on_submit():
+            user_id = request.form.get('user_id')
+            try:
+                ObjectId(user_id)  # Validate user_id format
+                user = db.users.find_one({'_id': ObjectId(user_id)})
+                if not user:
+                    flash(trans('user_not_found', default='User not found'), 'danger')
+                    return redirect(url_for('admin.manage_user_subscriptions'))
+                plan_durations = {'monthly': 30, 'yearly': 365}
+                update_data = {
+                    'is_subscribed': form.is_subscribed.data == 'True',
+                    'subscription_plan': form.subscription_plan.data or None,
+                    'subscription_start': datetime.now(timezone.utc) if form.is_subscribed.data == 'True' else None,
+                    'subscription_end': form.subscription_end.data if form.subscription_end.data else None,
+                    'updated_at': datetime.now(timezone.utc)
+                }
+                if form.is_subscribed.data == 'True' and not form.subscription_end.data and form.subscription_plan.data:
+                    duration = plan_durations.get(form.subscription_plan.data, 30)
+                    update_data['subscription_end'] = datetime.now(timezone.utc) + timedelta(days=duration)
+                db.users.update_one(
+                    {'_id': ObjectId(user_id)},
+                    {'$set': update_data}
+                )
+                logger.info(f"User subscription updated: id={user_id}, subscribed={update_data['is_subscribed']}, plan={update_data['subscription_plan']}, admin={current_user.id}",
+                            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                log_audit_action('update_user_subscription', {'user_id': user_id, 'is_subscribed': update_data['is_subscribed'], 'subscription_plan': update_data['subscription_plan']})
+                flash(trans('subscription_updated', default='User subscription updated successfully'), 'success')
                 return redirect(url_for('admin.manage_user_subscriptions'))
-            plan_durations = {'monthly': 30, 'yearly': 365}
-            update_data = {
-                'is_subscribed': form.is_subscribed.data == 'True',
-                'subscription_plan': form.subscription_plan.data or None,
-                'subscription_start': datetime.now(timezone.utc) if form.is_subscribed.data == 'True' else None,  # Updated to timezone-aware
-                'subscription_end': form.subscription_end.data if form.subscription_end.data else None,
-                'updated_at': datetime.now(timezone.utc)  # Updated to timezone-aware
-            }
-            if form.is_subscribed.data == 'True' and not form.subscription_end.data and form.subscription_plan.data:
-                duration = plan_durations.get(form.subscription_plan.data, 30)
-                update_data['subscription_end'] = datetime.now(timezone.utc) + timedelta(days=duration)
-            db.users.update_one(
-                {'_id': user_id},
-                {'$set': update_data}
+            except errors.InvalidId:
+                logger.error(f"Invalid user_id format: {user_id}",
+                             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
+                return redirect(url_for('admin.manage_user_subscriptions'))
+            except Exception as e:
+                logger.error(f"Error updating user subscription {user_id}: {str(e)}",
+                             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+                return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
+        
+        for user in users:
+            user['_id'] = str(user['_id'])
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end')
+            # Convert naive datetimes to timezone-aware
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
             )
-            logger.info(f"User subscription updated: id={user_id}, subscribed={update_data['is_subscribed']}, plan={update_data['subscription_plan']}, admin={current_user.id}",
-                        extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            log_audit_action('update_user_subscription', {'user_id': user_id, 'is_subscribed': update_data['is_subscribed'], 'subscription_plan': update_data['subscription_plan']})
-            flash(trans('subscription_updated', default='User subscription updated successfully'), 'success')
-            return redirect(url_for('admin.manage_user_subscriptions'))
-        except errors.InvalidId:
-            logger.error(f"Invalid user_id format: {user_id}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
-            return redirect(url_for('admin.manage_user_subscriptions'))
-        except Exception as e:
-            logger.error(f"Error updating user subscription {user_id}: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
-    
-    for user in users:
-        user['_id'] = str(user['_id'])
-        trial_end = user.get('trial_end')
-        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
-        # Convert naive datetimes to timezone-aware
-        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
-        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
-        user['is_trial_active'] = (
-            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
-            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
-        )
-    return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
+        return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
+    except Exception as e:
+        logger.error(f"Error in manage_user_subscriptions for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/audit', methods=['GET'])
 @login_required
@@ -384,6 +419,8 @@ def audit():
     """View audit logs of admin actions."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         logs = list(db.audit_logs.find().sort('timestamp', -1).limit(100))
         for log in logs:
             log['_id'] = str(log['_id'])
@@ -392,7 +429,7 @@ def audit():
         logger.error(f"Error fetching audit logs for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/audit.html', logs=[])
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/feedback', methods=['GET', 'POST'])
 @login_required
@@ -402,6 +439,8 @@ def manage_feedback():
     """View and filter user feedback."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         form = FeedbackFilterForm()
         filter_kwargs = {}
         
@@ -432,7 +471,7 @@ def manage_feedback():
         logger.error(f"Error fetching feedback for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/feedback.html', form=form, feedback_list=[]), 500
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/debtors', methods=['GET', 'POST'])
 @login_required
@@ -440,16 +479,18 @@ def manage_feedback():
 @utils.limiter.limit("50 per hour")
 def manage_debtors():
     """Manage debtors: list all and add new ones."""
-    db = utils.get_mongo_db()
-    form = DebtorForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        form = DebtorForm()
+        if request.method == 'POST' and form.validate_on_submit():
             debtor = {
                 'name': utils.sanitize_input(form.name.data, max_length=100),
                 'amount': utils.clean_currency(form.amount.data),
                 'due_date': form.due_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
+                'created_at': datetime.now(timezone.utc)
             }
             result = db.debtors.insert_one(debtor)
             debtor_id = str(result.inserted_id)
@@ -458,16 +499,16 @@ def manage_debtors():
             log_audit_action('add_debtor', {'debtor_id': debtor_id, 'name': debtor['name']})
             flash(trans('debtor_added', default='Debtor added successfully'), 'success')
             return redirect(url_for('admin.manage_debtors'))
-        except Exception as e:
-            logger.error(f"Error adding debtor: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/debtors.html', form=form, debtors=[])
-    
-    debtors = list(db.debtors.find().sort('created_at', -1))
-    for debtor in debtors:
-        debtor['_id'] = str(debtor['_id'])
-    return render_template('admin/debtors.html', form=form, debtors=debtors, title=trans('admin_debtors_title', default='Manage Debtors'))
+        
+        debtors = list(db.debtors.find().sort('created_at', -1))
+        for debtor in debtors:
+            debtor['_id'] = str(debtor['_id'])
+        return render_template('admin/debtors.html', form=form, debtors=debtors, title=trans('admin_debtors_title', default='Manage Debtors'))
+    except Exception as e:
+        logger.error(f"Error in manage_debtors for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/creditors', methods=['GET', 'POST'])
 @login_required
@@ -475,16 +516,18 @@ def manage_debtors():
 @utils.limiter.limit("50 per hour")
 def manage_creditors():
     """Manage creditors: list all and add new ones."""
-    db = utils.get_mongo_db()
-    form = CreditorForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        form = CreditorForm()
+        if request.method == 'POST' and form.validate_on_submit():
             creditor = {
                 'name': utils.sanitize_input(form.name.data, max_length=100),
                 'amount': utils.clean_currency(form.amount.data),
                 'due_date': form.due_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
+                'created_at': datetime.now(timezone.utc)
             }
             result = db.creditors.insert_one(creditor)
             creditor_id = str(result.inserted_id)
@@ -493,16 +536,16 @@ def manage_creditors():
             log_audit_action('add_creditor', {'creditor_id': creditor_id, 'name': creditor['name']})
             flash(trans('creditor_added', default='Creditor added successfully'), 'success')
             return redirect(url_for('admin.manage_creditors'))
-        except Exception as e:
-            logger.error(f"Error adding creditor: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/creditors.html', form=form, creditors=[])
-    
-    creditors = list(db.creditors.find().sort('created_at', -1))
-    for creditor in creditors:
-        creditor['_id'] = str(creditor['_id'])
-    return render_template('admin/creditors.html', form=form, creditors=creditors, title=trans('admin_creditors_title', default='Manage Creditors'))
+        
+        creditors = list(db.creditors.find().sort('created_at', -1))
+        for creditor in creditors:
+            creditor['_id'] = str(creditor['_id'])
+        return render_template('admin/creditors.html', form=form, creditors=creditors, title=trans('admin_creditors_title', default='Manage Creditors'))
+    except Exception as e:
+        logger.error(f"Error in manage_creditors for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/records', methods=['GET'])
 @login_required
@@ -512,6 +555,8 @@ def manage_records():
     """View all income/receipt records."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         records = list(get_records(db, {}).sort('created_at', -1))
         for record in records:
             record['_id'] = str(record['_id'])
@@ -520,7 +565,7 @@ def manage_records():
         logger.error(f"Error fetching records for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/records.html', records=[]), 500
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/cashflows', methods=['GET'])
 @login_required
@@ -530,6 +575,8 @@ def manage_cashflows():
     """View all payment outflow records."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         cashflows = list(get_cashflows(db, {}).sort('created_at', -1))
         for cashflow in cashflows:
             cashflow['_id'] = str(cashflow['_id'])
@@ -538,7 +585,7 @@ def manage_cashflows():
         logger.error(f"Error fetching cashflows for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/cashflows.html', cashflows=[]), 500
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/funds', methods=['GET', 'POST'])
 @login_required
@@ -546,16 +593,18 @@ def manage_cashflows():
 @utils.limiter.limit("50 per hour")
 def manage_funds():
     """Manage funding records: list all and add new ones."""
-    db = utils.get_mongo_db()
-    form = FundForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        try:
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        form = FundForm()
+        if request.method == 'POST' and form.validate_on_submit():
             fund = {
                 'source': utils.sanitize_input(form.source.data, max_length=100),
                 'amount': utils.clean_currency(form.amount.data),
                 'received_date': form.received_date.data,
                 'created_by': current_user.id,
-                'created_at': datetime.now(timezone.utc)  # Updated to timezone-aware
+                'created_at': datetime.now(timezone.utc)
             }
             result = db.funds.insert_one(fund)
             fund_id = str(result.inserted_id)
@@ -564,16 +613,16 @@ def manage_funds():
             log_audit_action('add_fund', {'fund_id': fund_id, 'source': fund['source']})
             flash(trans('fund_added', default='Fund added successfully'), 'success')
             return redirect(url_for('admin.manage_funds'))
-        except Exception as e:
-            logger.error(f"Error adding fund: {str(e)}",
-                         extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-            flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-            return render_template('admin/funds.html', form=form, funds=[])
-    
-    funds = list(db.funds.find().sort('created_at', -1))
-    for fund in funds:
-        fund['_id'] = str(fund['_id'])
-    return render_template('admin/funds.html', form=form, funds=funds, title=trans('admin_funds_title', default='Manage Funds'))
+        
+        funds = list(db.funds.find().sort('created_at', -1))
+        for fund in funds:
+            fund['_id'] = str(fund['_id'])
+        return render_template('admin/funds.html', form=form, funds=funds, title=trans('admin_funds_title', default='Manage Funds'))
+    except Exception as e:
+        logger.error(f"Error in manage_funds for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/kyc', methods=['GET'])
 @login_required
@@ -583,6 +632,8 @@ def manage_kyc():
     """View and manage KYC submissions."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         kyc_records = list(db.kyc_records.find().sort('created_at', -1))
         for record in kyc_records:
             record['_id'] = str(record['_id'])
@@ -591,7 +642,7 @@ def manage_kyc():
         logger.error(f"Error fetching KYC records for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('kyc/admin.html', kyc_records=[]), 500
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/reports/customers', methods=['GET'])
 @login_required
@@ -599,27 +650,35 @@ def manage_kyc():
 @utils.limiter.limit("50 per hour")
 def customer_reports():
     """Generate customer reports in HTML, PDF, or CSV format."""
-    db = utils.get_mongo_db()
-    format = request.args.get('format', 'html')
-    users = list(db.users.find())
-    for user in users:
-        user['_id'] = str(user['_id'])
-        trial_end = user.get('trial_end')
-        subscription_end = user.get('subscription_end', datetime.now(timezone.utc))
-        # Convert naive datetimes to timezone-aware
-        trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
-        subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end.tzinfo is None else subscription_end
-        user['is_trial_active'] = (
-            datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial')
-            else user.get('is_subscribed') and datetime.now(timezone.utc) <= subscription_end_aware
-        )
-    
-    if format == 'pdf':
-        return generate_customer_report_pdf(users)
-    elif format == 'csv':
-        return generate_customer_report_csv(users)
-    
-    return render_template('admin/customer_reports.html', users=users, title=trans('admin_customer_reports_title', default='Customer Reports'))
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        format = request.args.get('format', 'html')
+        users = list(db.users.find())
+        for user in users:
+            user['_id'] = str(user['_id'])
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end')
+            # Convert naive datetimes to timezone-aware
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
+            )
+        
+        if format == 'pdf':
+            return generate_customer_report_pdf(users)
+        elif format == 'csv':
+            return generate_customer_report_csv(users)
+        
+        return render_template('admin/customer_reports.html', users=users, title=trans('admin_customer_reports_title', default='Customer Reports'))
+    except Exception as e:
+        logger.error(f"Error in customer_reports for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/reports/investors', methods=['GET'])
 @login_required
@@ -627,26 +686,34 @@ def customer_reports():
 @utils.limiter.limit("50 per hour")
 def investor_reports():
     """Generate investor reports summarizing financial health."""
-    db = utils.get_mongo_db()
-    format = request.args.get('format', 'html')
-    funds = list(db.funds.find())
-    total_funds = sum(fund['amount'] for fund in funds)
-    debtors = list(db.debtors.find())
-    total_debtors = sum(debtor['amount'] for debtor in debtors)
-    creditors = list(db.creditors.find())
-    total_creditors = sum(creditor['amount'] for creditor in creditors)
-    report_data = {
-        'total_funds': utils.format_currency(total_funds),
-        'total_debtors': utils.format_currency(total_debtors),
-        'total_creditors': utils.format_currency(total_creditors),
-        'net_position': utils.format_currency(total_funds - total_creditors)
-    }
-    if format == 'pdf':
-        return generate_investor_report_pdf(report_data)
-    elif format == 'csv':
-        return generate_investor_report_csv(report_data)
-    
-    return render_template('admin/investor_reports.html', report_data=report_data, title=trans('admin_investor_reports_title', default='Investor Reports'))
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        format = request.args.get('format', 'html')
+        funds = list(db.funds.find())
+        total_funds = sum(fund['amount'] for fund in funds) if funds else 0
+        debtors = list(db.debtors.find())
+        total_debtors = sum(debtor['amount'] for debtor in debtors) if debtors else 0
+        creditors = list(db.creditors.find())
+        total_creditors = sum(creditor['amount'] for creditor in creditors) if creditors else 0
+        report_data = {
+            'total_funds': utils.format_currency(total_funds),
+            'total_debtors': utils.format_currency(total_debtors),
+            'total_creditors': utils.format_currency(total_creditors),
+            'net_position': utils.format_currency(total_funds - total_creditors)
+        }
+        if format == 'pdf':
+            return generate_investor_report_pdf(report_data)
+        elif format == 'csv':
+            return generate_investor_report_csv(report_data)
+        
+        return render_template('admin/investor_reports.html', report_data=report_data, title=trans('admin_investor_reports_title', default='Investor Reports'))
+    except Exception as e:
+        logger.error(f"Error in investor_reports for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
 
 @admin_bp.route('/forecasts', methods=['GET'])
 @login_required
@@ -656,15 +723,17 @@ def manage_forecasts():
     """View basic financial forecasts."""
     try:
         db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
         records = list(get_records(db, {}))
         cashflows = list(get_cashflows(db, {}))
-        total_income = sum(record['amount'] for record in records if record['type'] == 'income')
-        total_expenses = sum(cashflow['amount'] for cashflow in cashflows if cashflow['type'] == 'expense')
+        total_income = sum(record['amount'] for record in records if record['type'] == 'income') if records else 0
+        total_expenses = sum(cashflow['amount'] for cashflow in cashflows if cashflow['type'] == 'expense') if cashflows else 0
         forecast = {
             'total_income': utils.format_currency(total_income),
             'total_expenses': utils.format_currency(total_expenses),
             'net_cashflow': utils.format_currency(total_income - total_expenses),
-            'projected_income': utils.format_currency(total_income * 1.1),  # Simple 10% growth assumption
+            'projected_income': utils.format_currency(total_income * 1.1),
             'projected_expenses': utils.format_currency(total_expenses * 1.1)
         }
         return render_template('admin/forecasts.html', forecast=forecast, title=trans('admin_forecasts_title', default='Financial Forecasts'))
@@ -672,82 +741,107 @@ def manage_forecasts():
         logger.error(f"Error generating forecasts for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
-        return render_template('admin/forecasts.html', forecast={}), 500
+        return render_template('error/500.html'), 500
 
 def generate_customer_report_pdf(users):
     """Generate a PDF report of customer data."""
-    buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=A4)
-    p.setFont("Helvetica", 12)
-    p.drawString(1 * inch, 10.5 * inch, trans('admin_customer_report_title', default='Customer Report'))
-    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")  # Updated to timezone-aware
-    y = 9.5 * inch
-    p.drawString(1 * inch, y, trans('admin_username', default='Username'))
-    p.drawString(2.5 * inch, y, trans('admin_email', default='Email'))
-    p.drawString(4 * inch, y, trans('user_role', default='Role'))
-    p.drawString(5.5 * inch, y, trans('subscription_status', default='Subscription Status'))
-    y -= 0.3 * inch
-    for user in users:
-        status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
-        p.drawString(1 * inch, y, user['_id'])
-        p.drawString(2.5 * inch, y, user['email'])
-        p.drawString(4 * inch, y, user['role'])
-        p.drawString(5.5 * inch, y, status)
+    try:
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=A4)
+        p.setFont("Helvetica", 12)
+        p.drawString(1 * inch, 10.5 * inch, trans('admin_customer_report_title', default='Customer Report'))
+        p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")
+        y = 9.5 * inch
+        p.drawString(1 * inch, y, trans('admin_username', default='Username'))
+        p.drawString(2.5 * inch, y, trans('admin_email', default='Email'))
+        p.drawString(4 * inch, y, trans('user_role', default='Role'))
+        p.drawString(5.5 * inch, y, trans('subscription_status', default='Subscription Status'))
         y -= 0.3 * inch
-        if y < 1 * inch:
-            p.showPage()
-            y = 10.5 * inch
-    p.showPage()
-    p.save()
-    buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=customer_report.pdf'})
+        for user in users:
+            status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
+            p.drawString(1 * inch, y, user['_id'])
+            p.drawString(2.5 * inch, y, user['email'])
+            p.drawString(4 * inch, y, user['role'])
+            p.drawString(5.5 * inch, y, status)
+            y -= 0.3 * inch
+            if y < 1 * inch:
+                p.showPage()
+                p.setFont("Helvetica", 12)
+                y = 10.5 * inch
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=customer_report.pdf'})
+    except Exception as e:
+        logger.error(f"Error generating customer report PDF: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_report_error', default='An error occurred while generating the report'), 'danger')
+        return render_template('error/500.html'), 500
 
 def generate_customer_report_csv(users):
     """Generate a CSV report of customer data."""
-    output = [[trans('admin_username', default='Username'), trans('admin_email', default='Email'), trans('user_role', default='Role'), trans('subscription_status', default='Subscription Status')]]
-    for user in users:
-        status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
-        output.append([user['_id'], user['email'], user['role'], status])
-    buffer = BytesIO()
-    writer = csv.writer(buffer, lineterminator='\n')
-    writer.writerows(output)
-    buffer.seek(0)
-    return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=customer_report.csv'})
+    try:
+        output = [[trans('admin_username', default='Username'), trans('admin_email', default='Email'), trans('user_role', default='Role'), trans('subscription_status', default='Subscription Status')]]
+        for user in users:
+            status = 'Subscribed' if user.get('is_subscribed') and user.get('is_trial_active') else 'Trial' if user.get('is_trial') and user.get('is_trial_active') else 'Expired'
+            output.append([user['_id'], user['email'], user['role'], status])
+        buffer = BytesIO()
+        writer = csv.writer(buffer, lineterminator='\n')
+        writer.writerows(output)
+        buffer.seek(0)
+        return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=customer_report.csv'})
+    except Exception as e:
+        logger.error(f"Error generating customer report CSV: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_report_error', default='An error occurred while generating the report'), 'danger')
+        return render_template('error/500.html'), 500
 
 def generate_investor_report_pdf(report_data):
     """Generate a PDF report for investors."""
-    buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=A4)
-    p.setFont("Helvetica", 12)
-    p.drawString(1 * inch, 10.5 * inch, trans('admin_investor_report_title', default='Investor Report'))
-    p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")  # Updated to timezone-aware
-    y = 9.5 * inch
-    p.drawString(1 * inch, y, trans('fund_total', default='Total Funds'))
-    p.drawString(3 * inch, y, report_data['total_funds'])
-    y -= 0.3 * inch
-    p.drawString(1 * inch, y, trans('debtor_total', default='Total Debtors'))
-    p.drawString(3 * inch, y, report_data['total_debtors'])
-    y -= 0.3 * inch
-    p.drawString(1 * inch, y, trans('creditor_total', default='Total Creditors'))
-    p.drawString(3 * inch, y, report_data['total_creditors'])
-    y -= 0.3 * inch
-    p.drawString(1 * inch, y, trans('net_position', default='Net Position'))
-    p.drawString(3 * inch, y, report_data['net_position'])
-    p.showPage()
-    p.save()
-    buffer.seek(0)
-    return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=investor_report.pdf'})
+    try:
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=A4)
+        p.setFont("Helvetica", 12)
+        p.drawString(1 * inch, 10.5 * inch, trans('admin_investor_report_title', default='Investor Report'))
+        p.drawString(1 * inch, 10.2 * inch, f"{trans('admin_generated_on', default='Generated on')}: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")
+        y = 9.5 * inch
+        p.drawString(1 * inch, y, trans('fund_total', default='Total Funds'))
+        p.drawString(3 * inch, y, report_data['total_funds'])
+        y -= 0.3 * inch
+        p.drawString(1 * inch, y, trans('debtor_total', default='Total Debtors'))
+        p.drawString(3 * inch, y, report_data['total_debtors'])
+        y -= 0.3 * inch
+        p.drawString(1 * inch, y, trans('creditor_total', default='Total Creditors'))
+        p.drawString(3 * inch, y, report_data['total_creditors'])
+        y -= 0.3 * inch
+        p.drawString(1 * inch, y, trans('net_position', default='Net Position'))
+        p.drawString(3 * inch, y, report_data['net_position'])
+        p.showPage()
+        p.save()
+        buffer.seek(0)
+        return Response(buffer, mimetype='application/pdf', headers={'Content-Disposition': 'attachment;filename=investor_report.pdf'})
+    except Exception as e:
+        logger.error(f"Error generating investor report PDF: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_report_error', default='An error occurred while generating the report'), 'danger')
+        return render_template('error/500.html'), 500
 
 def generate_investor_report_csv(report_data):
     """Generate a CSV report for investors."""
-    output = [
-        [trans('fund_total', default='Total Funds'), report_data['total_funds']],
-        [trans('debtor_total', default='Total Debtors'), report_data['total_debtors']],
-        [trans('creditor_total', default='Total Creditors'), report_data['total_creditors']],
-        [trans('net_position', default='Net Position'), report_data['net_position']]
-    ]
-    buffer = BytesIO()
-    writer = csv.writer(buffer, lineterminator='\n')
-    writer.writerows(output)
-    buffer.seek(0)
-    return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=investor_report.csv'})
+    try:
+        output = [
+            [trans('fund_total', default='Total Funds'), report_data['total_funds']],
+            [trans('debtor_total', default='Total Debtors'), report_data['total_debtors']],
+            [trans('creditor_total', default='Total Creditors'), report_data['total_creditors']],
+            [trans('net_position', default='Net Position'), report_data['net_position']]
+        ]
+        buffer = BytesIO()
+        writer = csv.writer(buffer, lineterminator='\n')
+        writer.writerows(output)
+        buffer.seek(0)
+        return Response(buffer, mimetype='text/csv', headers={'Content-Disposition': 'attachment;filename=investor_report.csv'})
+    except Exception as e:
+        logger.error(f"Error generating investor report CSV: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_report_error', default='An error occurred while generating the report'), 'danger')
+        return render_template('error/500.html'), 500
