@@ -2,7 +2,7 @@
 <html lang="{{ lang | e }}">
 <head>
     {% extends "base.html" %}
-    {% block title %}{{ title | e }}{% endblock %}
+    {% block title %}{{ t('subscribe_title', default='Subscribe to FiCore') | e }}{% endblock %}
     {% block extra_head %}
     <script src="https://js.paystack.co/v1/inline.js"></script>
     <style>
@@ -64,9 +64,9 @@
         {% if current_user.is_authenticated %}
             <div class="trial-status text-center">
                 {% if current_user.is_subscribed %}
-                    <p class="text-success">{{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') | e }}{{ current_user.subscription_end.strftime('%Y-%m-%d') | e }}</p>
-                {% elif current_user.is_trial and current_user.trial_end > datetime.utcnow() %}
-                    <p>{{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end.strftime('%Y-%m-%d') | e }}</p>
+                    <p class="text-success">{{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') | e }}{{ current_user.subscription_end | format_date }}</p>
+                {% elif current_user.is_trial and not is_trial_expired(current_user.trial_end) %}
+                    <p>{{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end | format_date }}</p>
                 {% else %}
                     <p class="text-warning">{{ t('subscribe_trial_expired', default='Your trial has expired. Subscribe to continue using all features.') | e }}</p>
                 {% endif %}
@@ -78,7 +78,7 @@
             <div class="col-md-4">
                 <div class="pricing-card">
                     <h3>{{ plan.name | e }}</h3>
-                    <div class="price">{{ plan.price | e }}</div>
+                    <div class="price">{{ plan.price | format_currency }}</div>
                     <p>{{ plan.description | e }}</p>
                     <button class="btn-subscribe" onclick="initiatePayment('{{ plan.plan_code | e }}')">{{ t('subscribe_button', default='Subscribe Now') | e }}</button>
                 </div>
