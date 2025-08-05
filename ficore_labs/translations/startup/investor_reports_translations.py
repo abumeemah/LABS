@@ -1,6 +1,6 @@
 INVESTOR_REPORTS_TRANSLATIONS = {
     'en': {
-        'investor_reports_index': 'Investor Reports',
+        'investor_reports_index': 'Inv Reports',
         'investor_reports_title': 'Title',
         'investor_reports_subtitle': 'Share Updates with Investors',
         'investor_reports_create_title': 'Add New Investor Report',
@@ -9,7 +9,7 @@ INVESTOR_REPORTS_TRANSLATIONS = {
         'investor_reports_add_report': 'Add Investor Report',
         'investor_reports_edit_report': 'Edit Investor Report',
         'investor_reports_no_records': 'No investor reports recorded yet',
-        'investor_reports_dashboard': 'Investor Reports Dashboard',
+        'investor_reports_dashboard': 'Inv Reports',
         'investor_reports_dashboard_desc': 'Generate detailed reports for your investors.',
         'investor_reports_create_first': 'Start by adding your first investor report.',
         'investor_reports_date': 'Report Date',
