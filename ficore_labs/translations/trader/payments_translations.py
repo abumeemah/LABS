@@ -14,7 +14,7 @@ PAYMENTS_TRANSLATIONS = {
         'payments_share_type': 'Share Type',
         'payments_share_cost': 'Share Cost',
         'payments_fetch_error': 'Error Fetching Expenses',
-        'payments_subtitle': 'View Your Expenses',
+        'payments_subtitle': 'Shigar da kudin da aka Kashe na Sanaa',
         'payments_add_title': 'Add Expense',
         'payments_no_records': 'No Expenses Found',
         'payments_add_first': 'Add Your First Expense',
