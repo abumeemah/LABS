@@ -380,7 +380,7 @@ def create_app():
 
     # Define format_date filter
     @app.template_filter('format_date')
-    def format_date(value):
+    def format_date_wrapper(value):
         try:
             return format_date(value, lang=session.get('lang', 'en'), format_type='short')
         except Exception as e:
@@ -388,7 +388,7 @@ def create_app():
             return str(value)
 
     # Register format_date as global
-    app.jinja_env.globals['format_date'] = format_date
+    app.jinja_env.globals['format_date'] = format_date_wrapper
 
     # Set up Jinja globals
     app.jinja_env.globals.update(
