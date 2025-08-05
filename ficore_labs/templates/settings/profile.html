@@ -4,7 +4,6 @@
 <div class="profile-container">
     <div class="profile-header">
         <a href="{{ url_for('dashboard.index') }}" class="profile-back-arrow">←</a>
-        <h1>{{ t('settings_hello_user', default='Hello') }}, {{ user.display_name or user._id }}!</h1>
     </div>
 
     <div class="profile-card profile-account-type-card">
