@@ -4,7 +4,7 @@ Reports and analytics translations for accounting tools
 
 REPORTS_TRANSLATIONS = {
     'en': {
-        'reports_dashboard': 'Reports Dashboard',
+        'reports_dashboard': 'Reports',
         'reports_financial_reports': 'Financial Reports',
         # Reports
         'reports_start_date': 'Start Date',
