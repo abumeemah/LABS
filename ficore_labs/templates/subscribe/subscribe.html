@@ -65,7 +65,7 @@
             <div class="trial-status text-center">
                 {% if current_user.is_subscribed %}
                     <p class="text-success">{{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') | e }}{{ current_user.subscription_end | format_date }}</p>
-                {% elif current_user.is_trial and not is_trial_expired(current_user.trial_end) %}
+                {% elif current_user.is_trial and not is_trial_expired(current_user.trial_end, current_user.is_trial, current_user.is_subscribed, current_user.subscription_end) %}
                     <p>{{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end | format_date }}</p>
                 {% else %}
                     <p class="text-warning">{{ t('subscribe_trial_expired', default='Your trial has expired. Subscribe to continue using all features.') | e }}</p>
