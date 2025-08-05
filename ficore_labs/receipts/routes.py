@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFError
 from translations import trans
 import utils
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from zoneinfo import ZoneInfo
 from wtforms import StringField, DateField, FloatField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Optional, Length, NumberRange
@@ -244,7 +244,8 @@ def add():
         if form.validate_on_submit():
             try:
                 db = utils.get_mongo_db()
-                receipt_date = form.date.data.replace(tzinfo=ZoneInfo("UTC"))
+                # Convert date to datetime with UTC timezone
+                receipt_date = datetime.combine(form.date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 cashflow = {
                     'user_id': str(current_user.id),
                     'type': 'receipt',
@@ -317,7 +318,7 @@ def edit(id):
         
         form = ReceiptForm(data={
             'party_name': receipt['party_name'],
-            'date': receipt['created_at'],
+            'date': receipt['created_at'].date(),  # Extract date part for form
             'amount': receipt['amount'],
             'method': receipt.get('method'),
             'category': receipt.get('category'),
@@ -326,7 +327,8 @@ def edit(id):
         })
         if form.validate_on_submit():
             try:
-                receipt_date = form.date.data.replace(tzinfo=ZoneInfo("UTC"))
+                # Convert date to datetime with UTC timezone
+                receipt_date = datetime.combine(form.date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 updated_cashflow = {
                     'party_name': utils.sanitize_input(form.party_name.data, max_length=100),
                     'amount': form.amount.data,
