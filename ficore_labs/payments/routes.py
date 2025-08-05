@@ -5,7 +5,7 @@ from flask_wtf.csrf import CSRFError
 from translations import trans
 import utils
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from zoneinfo import ZoneInfo
 from wtforms import StringField, DateField, FloatField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Optional, Length, NumberRange
@@ -220,7 +220,8 @@ def add():
         if form.validate_on_submit():
             try:
                 db = utils.get_mongo_db()
-                payment_date = form.date.data.replace(tzinfo=ZoneInfo("UTC"))
+                # Convert date to datetime with UTC timezone
+                payment_date = datetime.combine(form.date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 cashflow = {
                     'user_id': str(current_user.id),
                     'type': 'payment',
@@ -228,7 +229,7 @@ def add():
                     'amount': form.amount.data,
                     'method': form.method.data,
                     'category': utils.sanitize_input(form.category.data, max_length=50) if form.category.data else None,
-                    'contact': utils.sanitize_input(form.contact.data, max_length=100) if form.contact.data else None,
+                    'contact': utils.sanitize_input(form.contact.data, max_length=100) if form.category.data else None,
                     'description': utils.sanitize_input(form.description.data, max_length=1000) if form.description.data else None,
                     'created_at': payment_date,
                     'updated_at': datetime.now(timezone.utc)
@@ -293,7 +294,7 @@ def edit(id):
         
         form = PaymentForm(data={
             'party_name': payment['party_name'],
-            'date': payment['created_at'],
+            'date': payment['created_at'].date(),  # Extract date part for form
             'amount': payment['amount'],
             'method': payment.get('method'),
             'category': payment.get('category'),
@@ -301,8 +302,8 @@ def edit(id):
             'description': payment.get('description')
         })
         if form.validate_on_submit():
-            try:
-                payment_date = form.date.data.replace(tzinfo=ZoneInfo("UTC"))
+            tryopenia:                # Convert date to datetime with UTC timezone
+                payment_date = datetime.combine(form.date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 updated_cashflow = {
                     'party_name': utils.sanitize_input(form.party_name.data, max_length=100),
                     'amount': form.amount.data,
