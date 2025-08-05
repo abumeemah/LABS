@@ -5,7 +5,7 @@ Funds management translations for accounting tools
 FUNDS_TRANSLATIONS = {
     'en': {
         'funds_title': 'Funds',
-        'funds_subtitle': 'Track Your Capital Inflows',
+        'funds_subtitle': 'Kudin da aka karba don bunkasa Sanaa',
         'funds_create_title': 'Add New Fund',
         'funds_manage': 'Manage Funds',
         'funds_details': 'Fund Details',
