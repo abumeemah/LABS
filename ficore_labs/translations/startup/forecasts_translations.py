@@ -1,6 +1,6 @@
 FORECASTS_TRANSLATIONS = {
     'en': {
-        'forecasts_index': 'Financial Forecasts',
+        'forecasts_index': 'Forecasts',
         'forecasts_title': 'Title',
         'forecasts_subtitle': 'Plan Your Financial Future',
         'forecasts_create_title': 'Add New Forecast',
@@ -8,7 +8,7 @@ FORECASTS_TRANSLATIONS = {
         'forecasts_details': 'Forecast Details',
         'forecasts_add_forecast': 'Add Forecast',
         'forecasts_edit_forecast': 'Edit Forecast',
-        'forecasts_dashboard': 'Forecasts Dashboard',
+        'forecasts_dashboard': 'Forecasts',
         'forecasts_dashboard_desc': 'Plan ahead with accurate financial forecasts.',
         'forecasts_no_records': 'No forecasts recorded yet',
         'forecasts_create_first': 'Start by adding your first forecast.',
