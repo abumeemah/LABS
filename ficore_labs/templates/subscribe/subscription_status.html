@@ -42,7 +42,7 @@
                         <p class="profile-text">
                             {{ t('subscribe_positive_feedback', default='Thank you for being a valued subscriber! Enjoy full access to all FiCore features.') | e }}
                         </p>
-                    {% elif current_user.is_trial and current_user.is_trial_active %}
+                    {% elif current_user.is_trial and not is_trial_expired(current_user.trial_end, current_user.is_trial, current_user.is_subscribed, current_user.subscription_end) %}
                         <p class="profile-text">
                             {{ t('subscribe_trial_active', default='Your trial is active until ') | e }}{{ current_user.trial_end | format_date | e }}
                         </p>
