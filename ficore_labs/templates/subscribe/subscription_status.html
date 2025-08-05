@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}{{ t('subscribe_status_title', default='Subscription Status') }} - FiCore{% endblock %}
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <a href="{{ url_for('settings.profile') }}" class="profile-back-arrow">←</a>
+        <h1>{{ t('subscribe_status_title', default='Subscription Status') }}</h1>
+    </div>
+
+    <div class="profile-card">
+        <div class="profile-card-body">
+            <h5 class="profile-heading">{{ t('subscribe_current_status', default='Your Current Subscription Status') }}</h5>
+            <div class="profile-text-center">
+                {% if current_user.is_subscribed %}
+                    <p class="profile-text profile-text-success">
+                        {{ t('subscribe_already_subscribed', default='You are already subscribed! Your plan is active until ') }}{{ current_user.subscription_end.strftime('%Y-%m-%d') }}
+                    </p>
+                    <p class="profile-text">
+                        {{ t('subscribe_plan', default='Plan') }}: {{ current_user.subscription_plan|capitalize }}
+                    </p>
+                {% elif current_user.is_trial and current_user.trial_end > datetime.now(timezone.utc) %}
+                    <p class="profile-text">
+                        {{ t('subscribe_trial_active', default='Your trial is active until ') }}{{ current_user.trial_end.strftime('%Y-%m-%d') }}
+                    </p>
+                    <a href="{{ url_for('subscribe_bp.subscribe') }}" class="profile-btn profile-btn-primary">
+                        {{ t('subscribe_button', default='Subscribe Now') }}
+                    </a>
+                {% else %}
+                    <p class="profile-text profile-text-warning">
+                        {{ t('subscribe_trial_expired', default='Your trial has expired. Subscribe to continue using all features.') }}
+                    </p>
+                    <a href="{{ url_for('subscribe_bp.subscribe') }}" class="profile-btn profile-btn-primary">
+                        {{ t('subscribe_button', default='Subscribe Now') }}
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
