@@ -66,7 +66,7 @@ GENERAL_TRANSLATIONS = {
         'reports_subtitle': 'Business Reports',
         'reports_profit_loss': 'Profit/Loss Report',
         'reports_debtors_creditors': 'Debtors/Creditors Report',
-        'general_file_upload': 'File Upload',
+        'general_file_upload': 'File Upload (Optional)',
         'general_amount_owed': 'Amount Owed',
         'creditor': 'Creditor',
         'debtor': 'Debtor',
