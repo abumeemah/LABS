@@ -40,6 +40,15 @@ class SubscriptionForm(FlaskForm):
     subscription_end = DateField(trans('subscription_end', default='Subscription End Date'), format='%Y-%m-%d', validators=[validators.Optional()], render_kw={'class': 'form-control'})
     submit = SubmitField(trans('subscription_update', default='Update Subscription'), render_kw={'class': 'btn btn-primary'})
 
+class TrialForm(FlaskForm):
+    is_trial = SelectField(trans('trial_status', default='Trial Status'), choices=[('True', 'Active Trial'), ('False', 'No Trial')], validators=[DataRequired()], render_kw={'class': 'form-select'})
+    trial_end = DateField(trans('trial_end', default='Trial End Date'), format='%Y-%m-%d', validators=[validators.Optional()], render_kw={'class': 'form-control'})
+    submit = SubmitField(trans('trial_update', default='Update Trial'), render_kw={'class': 'btn btn-primary'})
+    bulk_trial_days = SelectField(trans('bulk_trial_days', default='Extend Trial for New Users'), choices=[('', 'Select Days'), ('30', '30 Days'), ('60', '60 Days'), ('90', '90 Days')], validators=[validators.Optional()], render_kw={'class': 'form-select'})
+    bulk_trial_start = DateField(trans('bulk_trial_start', default='Registration Start Date'), format='%Y-%m-%d', validators=[validators.Optional()], render_kw={'class': 'form-control'})
+    bulk_trial_end = DateField(trans('bulk_trial_end', default='Registration End Date'), format='%Y-%m-%d', validators=[validators.Optional()], render_kw={'class': 'form-control'})
+    bulk_submit = SubmitField(trans('bulk_trial_update', default='Apply Bulk Trial'), render_kw={'class': 'btn btn-primary'})
+
 class DebtorForm(FlaskForm):
     name = StringField(trans('debtor_name', default='Debtor Name'), validators=[DataRequired(), validators.Length(min=2, max=100)], render_kw={'class': 'form-control'})
     amount = FloatField(trans('debtor_amount', default='Amount Owed'), validators=[DataRequired(), NumberRange(min=0)], render_kw={'class': 'form-control'})
@@ -115,7 +124,6 @@ def dashboard():
             user['_id'] = str(user['_id'])
             trial_end = user.get('trial_end')
             subscription_end = user.get('subscription_end')
-            # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
             subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
@@ -152,7 +160,6 @@ def manage_users():
             user['username'] = user['_id']
             trial_end = user.get('trial_end')
             subscription_end = user.get('subscription_end')
-            # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
             subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
@@ -173,7 +180,7 @@ def manage_users():
 def suspend_user(user_id):
     """Suspend a user account."""
     try:
-        ObjectId(user_id)  # Validate user_id format
+        ObjectId(user_id)
         db = utils.get_mongo_db()
         if not db:
             raise Exception("Failed to connect to MongoDB")
@@ -212,7 +219,7 @@ def suspend_user(user_id):
 def delete_user(user_id):
     """Delete a user and their data."""
     try:
-        ObjectId(user_id)  # Validate user_id format
+        ObjectId(user_id)
         db = utils.get_mongo_db()
         if not db:
             raise Exception("Failed to connect to MongoDB")
@@ -259,7 +266,7 @@ def delete_item(collection, item_id):
         flash(trans('admin_invalid_collection', default='Invalid collection selected'), 'danger')
         return redirect(url_for('admin.dashboard'))
     try:
-        ObjectId(item_id)  # Validate item_id format
+        ObjectId(item_id)
         db = utils.get_mongo_db()
         if not db:
             raise Exception("Failed to connect to MongoDB")
@@ -298,7 +305,7 @@ def manage_user_roles():
         if request.method == 'POST' and form.validate_on_submit():
             user_id = request.form.get('user_id')
             try:
-                ObjectId(user_id)  # Validate user_id format
+                ObjectId(user_id)
                 user = db.users.find_one({'_id': ObjectId(user_id)})
                 if not user:
                     flash(trans('user_not_found', default='User not found'), 'danger')
@@ -328,7 +335,6 @@ def manage_user_roles():
             user['_id'] = str(user['_id'])
             trial_end = user.get('trial_end')
             subscription_end = user.get('subscription_end')
-            # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
             subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
@@ -357,7 +363,7 @@ def manage_user_subscriptions():
         if request.method == 'POST' and form.validate_on_submit():
             user_id = request.form.get('user_id')
             try:
-                ObjectId(user_id)  # Validate user_id format
+                ObjectId(user_id)
                 user = db.users.find_one({'_id': ObjectId(user_id)})
                 if not user:
                     flash(trans('user_not_found', default='User not found'), 'danger')
@@ -379,7 +385,12 @@ def manage_user_subscriptions():
                 )
                 logger.info(f"User subscription updated: id={user_id}, subscribed={update_data['is_subscribed']}, plan={update_data['subscription_plan']}, admin={current_user.id}",
                             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
-                log_audit_action('update_user_subscription', {'user_id': user_id, 'is_subscribed': update_data['is_subscribed'], 'subscription_plan': update_data['subscription_plan']})
+                log_audit_action('update_user_subscription', {
+                    'user_id': user_id,
+                    'is_subscribed': update_data['is_subscribed'],
+                    'subscription_plan': update_data['subscription_plan'],
+                    'subscription_end': update_data['subscription_end'].strftime('%Y-%m-%d') if update_data['subscription_end'] else None
+                })
                 flash(trans('subscription_updated', default='User subscription updated successfully'), 'success')
                 return redirect(url_for('admin.manage_user_subscriptions'))
             except errors.InvalidId:
@@ -397,7 +408,6 @@ def manage_user_subscriptions():
             user['_id'] = str(user['_id'])
             trial_end = user.get('trial_end')
             subscription_end = user.get('subscription_end')
-            # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
             subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
@@ -407,6 +417,116 @@ def manage_user_subscriptions():
         return render_template('admin/user_subscriptions.html', form=form, users=users, title=trans('admin_manage_user_subscriptions_title', default='Manage User Subscriptions'))
     except Exception as e:
         logger.error(f"Error in manage_user_subscriptions for admin {current_user.id}: {str(e)}",
+                     extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+        flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+        return render_template('error/500.html'), 500
+
+@admin_bp.route('/users/trials', methods=['GET', 'POST'])
+@login_required
+@utils.requires_role('admin')
+@utils.limiter.limit("50 per hour")
+def manage_user_trials():
+    """Manage user trials: list all users and update their trial status, including bulk updates."""
+    try:
+        db = utils.get_mongo_db()
+        if not db:
+            raise Exception("Failed to connect to MongoDB")
+        users = list(db.users.find())
+        form = TrialForm()
+        if request.method == 'POST' and form.validate_on_submit():
+            # Handle individual trial update
+            user_id = request.form.get('user_id')
+            if user_id:
+                try:
+                    ObjectId(user_id)
+                    user = db.users.find_one({'_id': ObjectId(user_id)})
+                    if not user:
+                        flash(trans('user_not_found', default='User not found'), 'danger')
+                        return redirect(url_for('admin.manage_user_trials'))
+                    update_data = {
+                        'is_trial': form.is_trial.data == 'True',
+                        'trial_end': form.trial_end.data if form.trial_end.data else None,
+                        'updated_at': datetime.now(timezone.utc)
+                    }
+                    if form.is_trial.data == 'True' and not form.trial_end.data:
+                        update_data['trial_end'] = datetime.now(timezone.utc) + timedelta(days=30)
+                    db.users.update_one(
+                        {'_id': ObjectId(user_id)},
+                        {'$set': update_data}
+                    )
+                    logger.info(f"User trial updated: id={user_id}, is_trial={update_data['is_trial']}, trial_end={update_data['trial_end']}, admin={current_user.id}",
+                                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                    log_audit_action('update_user_trial', {
+                        'user_id': user_id,
+                        'is_trial': update_data['is_trial'],
+                        'trial_end': update_data['trial_end'].strftime('%Y-%m-%d') if update_data['trial_end'] else None
+                    })
+                    flash(trans('trial_updated', default='User trial updated successfully'), 'success')
+                    return redirect(url_for('admin.manage_user_trials'))
+                except errors.InvalidId:
+                    logger.error(f"Invalid user_id format: {user_id}",
+                                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                    flash(trans('admin_invalid_user_id', default='Invalid user ID'), 'danger')
+                    return redirect(url_for('admin.manage_user_trials'))
+                except Exception as e:
+                    logger.error(f"Error updating user trial {user_id}: {str(e)}",
+                                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                    flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+                    return render_template('admin/user_trials.html', form=form, users=users, title=trans('admin_manage_user_trials_title', default='Manage User Trials'))
+            
+            # Handle bulk trial update
+            if form.bulk_trial_days.data and form.bulk_trial_start.data and form.bulk_trial_end.data:
+                try:
+                    days = int(form.bulk_trial_days.data)
+                    start_date = form.bulk_trial_start.data
+                    end_date = form.bulk_trial_end.data
+                    if start_date > end_date:
+                        flash(trans('admin_invalid_date_range', default='Start date must be before end date'), 'danger')
+                        return redirect(url_for('admin.manage_user_trials'))
+                    start_date_aware = datetime.combine(start_date, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
+                    end_date_aware = datetime.combine(end_date, datetime.max.time(), tzinfo=ZoneInfo("UTC"))
+                    trial_end = datetime.now(timezone.utc) + timedelta(days=days)
+                    query = {
+                        'created_at': {'$gte': start_date_aware, '$lte': end_date_aware},
+                        'role': {'$in': ['trader', 'startup']}
+                    }
+                    update_data = {
+                        'is_trial': True,
+                        'trial_end': trial_end,
+                        'updated_at': datetime.now(timezone.utc)
+                    }
+                    result = db.users.update_many(query, {'$set': update_data})
+                    updated_count = result.modified_count
+                    logger.info(f"Bulk trial update: {updated_count} users updated, days={days}, start={start_date}, end={end_date}, admin={current_user.id}",
+                                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                    log_audit_action('bulk_trial_update', {
+                        'updated_count': updated_count,
+                        'trial_days': days,
+                        'registration_start': start_date.strftime('%Y-%m-%d'),
+                        'registration_end': end_date.strftime('%Y-%m-%d'),
+                        'trial_end': trial_end.strftime('%Y-%m-%d')
+                    })
+                    flash(trans('bulk_trial_updated', default=f'Successfully updated trial for {updated_count} users'), 'success')
+                    return redirect(url_for('admin.manage_user_trials'))
+                except Exception as e:
+                    logger.error(f"Error in bulk trial update: {str(e)}",
+                                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
+                    flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
+                    return render_template('admin/user_trials.html', form=form, users=users, title=trans('admin_manage_user_trials_title', default='Manage User Trials'))
+        
+        for user in users:
+            user['_id'] = str(user['_id'])
+            trial_end = user.get('trial_end')
+            subscription_end = user.get('subscription_end')
+            trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
+            subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
+            user['is_trial_active'] = (
+                datetime.now(timezone.utc) <= trial_end_aware if user.get('is_trial') and trial_end_aware
+                else user.get('is_subscribed') and subscription_end_aware and datetime.now(timezone.utc) <= subscription_end_aware
+            )
+        return render_template('admin/user_trials.html', form=form, users=users, title=trans('admin_manage_user_trials_title', default='Manage User Trials'))
+    except Exception as e:
+        logger.error(f"Error in manage_user_trials for admin {current_user.id}: {str(e)}",
                      extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id})
         flash(trans('admin_database_error', default='An error occurred while accessing the database'), 'danger')
         return render_template('error/500.html'), 500
@@ -660,7 +780,6 @@ def customer_reports():
             user['_id'] = str(user['_id'])
             trial_end = user.get('trial_end')
             subscription_end = user.get('subscription_end')
-            # Convert naive datetimes to timezone-aware
             trial_end_aware = trial_end.replace(tzinfo=ZoneInfo("UTC")) if trial_end and trial_end.tzinfo is None else trial_end
             subscription_end_aware = subscription_end.replace(tzinfo=ZoneInfo("UTC")) if subscription_end and subscription_end.tzinfo is None else subscription_end
             user['is_trial_active'] = (
