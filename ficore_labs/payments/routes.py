@@ -229,7 +229,7 @@ def add():
                     'amount': form.amount.data,
                     'method': form.method.data,
                     'category': utils.sanitize_input(form.category.data, max_length=50) if form.category.data else None,
-                    'contact': utils.sanitize_input(form.contact.data, max_length=100) if form.category.data else None,
+                    'contact': utils.sanitize_input(form.contact.data, max_length=100) if form.contact.data else None,
                     'description': utils.sanitize_input(form.description.data, max_length=1000) if form.description.data else None,
                     'created_at': payment_date,
                     'updated_at': datetime.now(timezone.utc)
@@ -302,7 +302,8 @@ def edit(id):
             'description': payment.get('description')
         })
         if form.validate_on_submit():
-            tryopenia:                # Convert date to datetime with UTC timezone
+            try:  # Fixed the typo from 'tryopenia' to 'try'
+                # Convert date to datetime with UTC timezone
                 payment_date = datetime.combine(form.date.data, datetime.min.time(), tzinfo=ZoneInfo("UTC"))
                 updated_cashflow = {
                     'party_name': utils.sanitize_input(form.party_name.data, max_length=100),
