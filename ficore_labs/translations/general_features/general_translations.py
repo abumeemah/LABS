@@ -376,7 +376,7 @@ GENERAL_TRANSLATIONS = {
         'general_finance_news': 'Finance News',
         'general_index_created': 'Index created successfully',
         'general_who_we_serve': 'Who We Serve',
-        'general_who_we_serve_desc': 'Tailored financial solutions for individuals, traders, and agents',
+        'general_who_we_serve_desc': 'Your Money, Your Terms',
         'general_our_tools': 'Our Tools',
         'general_tools_desc': 'Powerful tools to manage your finances effectively',
         'general_debtors_creditors': 'Debtors & Creditors',
