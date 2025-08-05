@@ -108,9 +108,7 @@ def profile():
                 f"User {user_id} not found",
                 extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
             )
-            flash(trans
-
-('general_user_not_found', default='User not found'), 'danger')
+            flash(trans('general_user_not_found', default='User not found'), 'danger')
             return redirect(url_for('general_bp.home'))
 
         form = ProfileForm()
@@ -118,11 +116,12 @@ def profile():
             form.full_name.data = user.display_name
             form.email.data = user.email
             form.phone.data = user.phone
-            if user.role in ['trader', 'startup'] and user.business_details:
-                form.business_name.data = user.business_details.get('name', '')
-                form.business_address.data = user.business_details.get('address', '')
-                form.industry.data = user.business_details.get('industry', '')
-                form.products_services.data = user.business_details.get('products_services', '')
+            user_dict = to_dict_user(user)
+            if user.role in ['trader', 'startup'] and user_dict.get('business_details'):
+                form.business_name.data = user_dict['business_details'].get('name', '')
+                form.business_address.data = user_dict['business_details'].get('address', '')
+                form.industry.data = user_dict['business_details'].get('industry', '')
+                form.products_services.data = user_dict['business_details'].get('products_services', '')
 
         if form.validate_on_submit():
             try:
