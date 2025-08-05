@@ -59,6 +59,12 @@
         </button>
     </div>
 
+    <div class="profile-grid">
+        <button class="profile-btn profile-btn-outline-primary profile-subscription-status-btn" onclick="location.href='{{ url_for('subscribe_bp.subscription_status') }}'">
+            <i class="bi bi-card-checklist profile-icon"></i> {{ t('settings_subscription_status', default='Check Your Subscription Status') }}
+        </button>
+    </div>
+
     <section class="profile-section">
         <h2 class="profile-section-heading">{{ t('settings_business_data', default='Business Data') }}</h2>
         <div class="profile-card">
