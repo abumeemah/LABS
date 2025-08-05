@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, flash, session
 from flask_login import login_required, current_user
 from translations import trans
 import utils
+from utils import format_date
 from bson import ObjectId
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
