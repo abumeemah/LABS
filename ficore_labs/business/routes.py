@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo  # Added ZoneInfo import
 import utils
 from utils import logger
+from translations import trans
 
 business = Blueprint('business', __name__, url_prefix='/business')
 
