@@ -8,12 +8,23 @@ from zoneinfo import ZoneInfo
 from models import create_feedback, get_mongo_db, get_user
 from flask import current_app
 import utils
+from users.routes import get_post_login_redirect  # Import the redirect helper
 
 general_bp = Blueprint('general_bp', __name__, url_prefix='/general')
 
 @general_bp.route('/landing')
 def landing():
     """Render the public landing page."""
+    if current_user.is_authenticated:
+        try:
+            return redirect(get_post_login_redirect(current_user.role))
+        except Exception as e:
+            current_app.logger.error(
+                f"Error redirecting authenticated user from landing: {str(e)}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('general_error', default='An error occurred. Please try again.'), 'danger')
+            return redirect(url_for('users.login')), 500
     try:
         current_app.logger.info(
             f"Accessing general.landing - User: {current_user.id if current_user.is_authenticated else 'anonymous'}, Authenticated: {current_user.is_authenticated}, Session: {dict(session)}",
