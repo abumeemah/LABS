@@ -196,7 +196,7 @@
                                                         data-name="{{ creditor.name }}"
                                                         data-amount="{{ creditor.amount_owed }}"
                                                         data-contact="{{ creditor.contact or '' }}"
-                                                        data-date="{{ creditor.created_at | format_datetime }}"
+                                                        data-date="{{ creditor.created_at | format_date }}"
                                                         data-description="{{ creditor.description or '' }}">
                                                     {{ trans('general_actions', default='Actions') | escape }}
                                                 </button>
@@ -243,7 +243,7 @@
                                                         data-name="{{ debtor.name }}"
                                                         data-amount="{{ debtor.amount_owed }}"
                                                         data-contact="{{ debtor.contact or '' }}"
-                                                        data-date="{{ debtor.created_at | format_datetime }}"
+                                                        data-date="{{ debtor.created_at | format_date }}"
                                                         data-reminders="{{ debtor.get('reminder_count', 0) }}"
                                                         data-description="{{ debtor.description or '' }}">
                                                     {{ trans('general_actions', default='Actions') | escape }}
@@ -290,7 +290,7 @@
                                                         data-id="{{ payment._id }}"
                                                         data-recipient="{{ payment.recipient }}"
                                                         data-amount="{{ payment.amount }}"
-                                                        data-date="{{ payment.created_at | format_datetime }}"
+                                                        data-date="{{ payment.created_at | format_date }}"
                                                         data-description="{{ payment.description or '' }}">
                                                     {{ trans('general_actions', default='Actions') | escape }}
                                                 </button>
@@ -336,7 +336,7 @@
                                                         data-id="{{ receipt._id }}"
                                                         data-payer="{{ receipt.payer }}"
                                                         data-amount="{{ receipt.amount }}"
-                                                        data-date="{{ receipt.created_at | format_datetime }}"
+                                                        data-date="{{ receipt.created_at | format_date }}"
                                                         data-description="{{ receipt.description or '' }}">
                                                     {{ trans('general_actions', default='Actions') | escape }}
                                                 </button>
@@ -382,7 +382,7 @@
                                                         data-id="{{ fund._id }}"
                                                         data-source="{{ fund.source }}"
                                                         data-amount="{{ fund.amount }}"
-                                                        data-date="{{ fund.created_at | format_datetime }}"
+                                                        data-date="{{ fund.created_at | format_date }}"
                                                         data-description="{{ fund.description or '' }}">
                                                     {{ trans('general_actions', default='Actions') | escape }}
                                                 </button>
