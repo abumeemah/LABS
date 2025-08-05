@@ -10,17 +10,24 @@
         {{ form.hidden_tag() }}
         <input type="hidden" name="type" value="debtor">
         <div class="col-12">
-            <label for="name" class="form-label">{{ t('general_name', default='Name') }}</label>
+            <label for="name" class="form-label">{{ t('debtors_debtor_name', default="Debtor's Name") }}</label>
             {{ form.name(class="form-control", required=True, disabled=not can_interact) }}
             {% if form.name.errors %}
                 <p class="text-danger mt-1">{{ form.name.errors[0] }}</p>
             {% endif %}
         </div>
         <div class="col-12">
-            <label for="contact" class="form-label">{{ t('general_contact', default='Contact') }}</label>
-            {{ form.contact(class="form-control", disabled=not can_interact) }}
-            {% if form.contact.errors %}
-                <p class="text-danger mt-1">{{ form.contact.errors[0] }}</p>
+            <label for="phone_number" class="form-label">{{ t('debtors_phone_number', default="Debtor's Phone Number") }}</label>
+            {{ form.phone_number(class="form-control", required=True, disabled=not can_interact) }}
+            {% if form.phone_number.errors %}
+                <p class="text-danger mt-1">{{ form.phone_number.errors[0] }}</p>
+            {% endif %}
+        </div>
+        <div class="col-12">
+            <label for="email" class="form-label">{{ t('debtors_email', default='Email') }}</label>
+            {{ form.email(class="form-control", disabled=not can_interact) }}
+            {% if form.email.errors %}
+                <p class="text-danger mt-1">{{ form.email.errors[0] }}</p>
             {% endif %}
         </div>
         <div class="col-12">
@@ -31,7 +38,7 @@
             {% endif %}
         </div>
         <div class="col-12">
-            <label for="description" class="form-label">{{ t('general_description', default='Description') }}</label>
+            <label for="description" class="form-label">{{ t('debtors_description', default='Description of Transaction') }}</label>
             {{ form.description(class="form-control", disabled=not can_interact) }}
             {% if form.description.errors %}
                 <p class="text-danger mt-1">{{ form.description.errors[0] }}</p>
