@@ -288,3 +288,16 @@
         padding: 0.625rem 1.25rem;
     }
 }
+/* Target the specific "Learn More" button within the promotion section */
+.promotion-card .promotion-text .btn {
+opacity: 1 !important; /* Ensures it's fully opaque */
+visibility: visible !important; /* Ensures it's not hidden */
+/* If it's hidden by display: none;, you might also need: */
+display: inline-block !important; /* Or 'block', 'flex', etc., depending on its original display type */
+}
+/* If the entire promotion-text div is being hidden, you might need this as well */
+.promotion-card .promotion-text {
+opacity: 1 !important;
+visibility: visible !important;
+display: block !important; /* Or 'flex', etc. */
+}
