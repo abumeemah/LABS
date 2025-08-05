@@ -21,7 +21,7 @@ RECEIPTS_TRANSLATIONS = {
         'receipts_add_money_in': 'Record Sales Income',
         'receipts_insufficient_coins': 'Insufficient coins to record sale',
         'receipts_title': 'Sales Income',
-        'receipts_subtitle': 'View Your Receipts',
+        'receipts_subtitle': 'Kudinda aka Biya Sanaa',
         'receipts_add_title': 'Add Receipt',
         'receipts_no_records': 'No Receipts Found',
         'receipts_add_first': 'Add Your First Receipt',
