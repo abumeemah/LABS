@@ -1,7 +1,7 @@
 INVESTOR_REPORTS_TRANSLATIONS = {
     'en': {
         'investor_reports_index': 'Inv Reports',
-        'investor_reports_title': 'Title',
+        'investor_reports_title': 'Generate Investor Reports',
         'investor_reports_subtitle': 'Share Updates with Investors',
         'investor_reports_create_title': 'Add New Investor Report',
         'investor_reports_manage': 'Manage Investor Reports',
