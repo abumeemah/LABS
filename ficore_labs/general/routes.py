@@ -10,9 +10,19 @@ from flask import current_app
 import utils
 from users.routes import get_post_login_redirect  # Import the redirect helper
 
+# Use the existing limiter from utils
+from utils import limiter
+
+# Exempt crawlers from rate limiting
+def exempt_crawlers():
+    user_agent = request.user_agent.string
+    return user_agent.startswith("facebookexternalhit") or \
+           user_agent.startswith("Mozilla/5.0+(compatible; UptimeRobot")
+
 general_bp = Blueprint('general_bp', __name__, url_prefix='/general')
 
 @general_bp.route('/landing')
+@limiter.limit("100 per minute", exempt_when=exempt_crawlers)
 def landing():
     """Render the public landing page."""
     if current_user.is_authenticated:
@@ -36,7 +46,8 @@ def landing():
             title=trans('general_welcome', lang=session.get('lang', 'en'), default='Welcome'),
             explore_features_for_template=explore_features
         ))
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        # Enable caching for unauthenticated users (public landing page)
+        response.headers['Cache-Control'] = 'public, max-age=300'  # Cache for 5 minutes
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         return response
