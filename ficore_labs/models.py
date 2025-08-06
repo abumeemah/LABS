@@ -480,7 +480,7 @@ def initialize_app_data(app):
                     if not index_exists:
                         try:
                             db_instance[collection_name].create_index(keys, name=index_name, **options)
-                            logger.info(f"{trans('general_index_created, default='Created index on')} {collection_name}: {keys} with options {options}", 
+                            logger.info(f"{trans('general_index_created', default='Created index on')} {collection_name}: {keys} with options {options}", 
                                        extra={'session_id': 'no-session-id'})
                         except Exception as e:
                             if 'IndexKeySpecsConflict' in str(e):
