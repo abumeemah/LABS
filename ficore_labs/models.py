@@ -939,7 +939,7 @@ def create_record(db, record_data):
         if not all(field in record_data for field in required_fields):
             raise ValueError(trans('general_missing_record_fields', default='Missing required record fields'))
         result = db.records.insert_one(record_data)
-        logger.info(f"{trans('general_record_created, default='Created record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_record_created', default='Created record with ID')}: {result.inserted_id}", 
                    extra={'session_id': record_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1011,7 +1011,7 @@ def create_cashflow(db, cashflow_data):
         if not all(field in cashflow_data for field in required_fields):
             raise ValueError(trans('general_missing_cashflow_fields', default='Missing required cashflow fields'))
         result = db.cashflows.insert_one(cashflow_data)
-        logger.info(f"{trans('general_cashflow_created, default='Created cashflow record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_cashflow_created', default='Created cashflow record with ID')}: {result.inserted_id}", 
                    extra={'session_id': cashflow_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1083,7 +1083,7 @@ def create_audit_log(db, audit_data):
         if not all(field in audit_data for field in required_fields):
             raise ValueError(trans('general_missing_audit_fields', default='Missing required audit log fields'))
         result = db.audit_logs.insert_one(audit_data)
-        logger.info(f"{trans('general_audit_log_created, default='Created audit log with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_audit_log_created', default='Created audit log with ID')}: {result.inserted_id}", 
                    extra={'session_id': audit_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1107,7 +1107,7 @@ def create_feedback(db, feedback_data):
         if not all(field in feedback_data for field in required_fields):
             raise ValueError(trans('general_missing_feedback_fields', default='Missing required feedback fields'))
         result = db.feedback.insert_one(feedback_data)
-        logger.info(f"{trans('general_feedback_created, default='Created feedback with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_feedback_created', default='Created feedback with ID')}: {result.inserted_id}", 
                    extra={'session_id': feedback_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1302,7 +1302,7 @@ def create_kyc_record(db, kyc_data):
         if not all(field in kyc_data for field in required_fields):
             raise ValueError(trans('general_missing_kyc_fields', default='Missing required KYC fields'))
         result = db.kyc_records.insert_one(kyc_data)
-        logger.info(f"{trans('general_kyc_created, default='Created KYC record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_kyc_created', default='Created KYC record with ID')}: {result.inserted_id}", 
                    extra={'session_id': kyc_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
