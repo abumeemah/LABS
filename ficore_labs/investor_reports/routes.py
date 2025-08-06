@@ -5,6 +5,7 @@ from flask_wtf.csrf import CSRFError
 from wtforms import StringField, TextAreaField, SubmitField, DateField
 from wtforms.validators import DataRequired, Optional, Length
 from bson import ObjectId
+from bson.errors import InvalidId
 from datetime import datetime, date
 import logging
 import io
@@ -122,9 +123,9 @@ def view(id):
         report['created_at'] = report['created_at'].isoformat() if report.get('created_at') else None
         
         return jsonify(report)
-    except ValueError:
+    except InvalidId:
         logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
+            f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         return jsonify({'error': trans('investor_reports_invalid_id', default='Invalid report ID')}), 404
@@ -160,9 +161,9 @@ def view_page(id):
             title=trans('investor_reports_details', default='Investor Report Details', lang=session.get('lang', 'en')),
             can_interact=utils.can_user_interact(current_user)
         )
-    except ValueError:
+    except InvalidId:
         logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
+            f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
@@ -181,17 +182,45 @@ def view_page(id):
 def generate_report(id):
     """Generate PDF report for an investor report."""
     try:
+        # Validate ObjectId format before querying
+        try:
+            ObjectId(id)
+        except InvalidId:
+            logger.error(
+                f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
+            return redirect(url_for('investor_reports.index'))
+        
         if not utils.can_user_interact(current_user):
+            logger.info(
+                f"User {current_user.id} blocked from generating report {id}: trial expired or no subscription",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
             return redirect(url_for('subscribe_bp.subscribe'))
         
         db = utils.get_mongo_db()
         query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
+        logger.info(
+            f"Querying for investor report with ID {id}, user_id {current_user.id}, type 'investor_report'",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         report = db.records.find_one(query)
         
         if not report:
+            logger.error(
+                f"No investor report found for ID {id}, user_id {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('investor_reports.index'))
+        
+        logger.info(
+            f"Found investor report with ID {id} for user {current_user.id}: {report}",
+            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+        )
         
         # Convert naive datetimes to timezone-aware
         if report.get('created_at') and report['created_at'].tzinfo is None:
@@ -242,16 +271,9 @@ def generate_report(id):
             }
         )
         
-    except ValueError:
-        logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
-            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
-        )
-        flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
-        return redirect(url_for('investor_reports.index'))
     except Exception as e:
         logger.error(
-            f"Error generating investor report {id}: {str(e)}",
+            f"Error generating investor report {id} for user {current_user.id}: {str(e)}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         flash(trans('investor_reports_report_generation_error', default='An error occurred'), 'danger')
@@ -263,6 +285,17 @@ def generate_report(id):
 def generate_report_csv(id):
     """Generate CSV report for an investor report."""
     try:
+        # Validate ObjectId format before querying
+        try:
+            ObjectId(id)
+        except InvalidId:
+            logger.error(
+                f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
+            return redirect(url_for('investor_reports.index'))
+        
         if not utils.can_user_interact(current_user):
             flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
             return redirect(url_for('subscribe_bp.subscribe'))
@@ -272,6 +305,10 @@ def generate_report_csv(id):
         report = db.records.find_one(query)
         
         if not report:
+            logger.error(
+                f"No investor report found for ID {id}, user_id {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('investor_reports.index'))
         
@@ -311,16 +348,9 @@ def generate_report_csv(id):
             }
         )
         
-    except ValueError:
-        logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
-            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
-        )
-        flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
-        return redirect(url_for('investor_reports.index'))
     except Exception as e:
         logger.error(
-            f"Error generating investor report CSV {id}: {str(e)}",
+            f"Error generating investor report CSV {id} for user {current_user.id}: {str(e)}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         flash(trans('investor_reports_report_generation_error', default='An error occurred'), 'danger')
@@ -361,7 +391,11 @@ def add():
                     'financial_highlights': utils.sanitize_input(form.financial_highlights.data, max_length=1000) if form.financial_highlights.data else None,
                     'created_at': datetime.now(UTC_TZ)
                 }
-                db.records.insert_one(report_data)
+                result = db.records.insert_one(report_data)
+                logger.info(
+                    f"Created investor report with ID {result.inserted_id} for user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
                 
                 flash(trans('investor_reports_add_success', default='Investor report added successfully'), 'success')
                 return redirect(url_for('investor_reports.index'))
@@ -407,6 +441,10 @@ def edit(id):
         report = db.records.find_one(query)
         
         if not report:
+            logger.error(
+                f"No investor report found for ID {id}, user_id {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
             return redirect(url_for('investor_reports.index'))
         
@@ -447,6 +485,10 @@ def edit(id):
                     {'_id': ObjectId(id)},
                     {'$set': updated_record}
                 )
+                logger.info(
+                    f"Updated investor report with ID {id} for user {current_user.id}",
+                    extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+                )
                 flash(trans('investor_reports_edit_success', default='Investor report updated successfully'), 'success')
                 return redirect(url_for('investor_reports.index'))
             except Exception as e:
@@ -463,9 +505,9 @@ def edit(id):
             title=trans('investor_reports_edit_report', default='Edit Investor Report', lang=session.get('lang', 'en')),
             can_interact=utils.can_user_interact(current_user)
         )
-    except ValueError:
+    except InvalidId:
         logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
+            f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
             extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
         )
         flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
@@ -498,7 +540,22 @@ def edit(id):
 def delete(id):
     """Delete an investor report."""
     try:
+        # Validate ObjectId format before querying
+        try:
+            ObjectId(id)
+        except InvalidId:
+            logger.error(
+                f"Invalid ObjectId format for investor report ID {id} for user {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
+            flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
+            return redirect(url_for('investor_reports.index'))
+
         if not utils.can_user_interact(current_user):
+            logger.info(
+                f"User {current_user.id} blocked from deleting report {id}: trial expired or no subscription",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_subscription_required', default='Your trial has expired or you do not have an active subscription. Please subscribe to continue.'), 'warning')
             return redirect(url_for('subscribe_bp.subscribe'))
 
@@ -506,15 +563,17 @@ def delete(id):
         query = {'_id': ObjectId(id), 'user_id': str(current_user.id), 'type': 'investor_report'}
         result = db.records.delete_one(query)
         if result.deleted_count:
+            logger.info(
+                f"Deleted investor report with ID {id} for user {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_delete_success', default='Investor report deleted successfully'), 'success')
         else:
+            logger.error(
+                f"No investor report found for ID {id}, user_id {current_user.id}",
+                extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
+            )
             flash(trans('investor_reports_record_not_found', default='Record not found'), 'danger')
-    except ValueError:
-        logger.error(
-            f"Invalid investor report ID {id} for user {current_user.id}",
-            extra={'session_id': session.get('sid', 'no-session-id'), 'user_id': current_user.id}
-        )
-        flash(trans('investor_reports_invalid_id', default='Invalid report ID'), 'danger')
     except CSRFError as e:
         logger.error(
             f"CSRF error in delete investor report {id} for user {current_user.id}: {str(e)}",
