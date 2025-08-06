@@ -109,6 +109,7 @@ def initialize_app_data(app):
     """
     Initialize MongoDB collections, indexes, and perform one-off migrations for business finance modules.
     Creates a default admin account if it doesn't exist, ensuring password is hashed.
+    Adds a sample investor_report record if none exist to support the new feature.
     
     Args:
         app: Flask application instance
@@ -479,7 +480,7 @@ def initialize_app_data(app):
                     if not index_exists:
                         try:
                             db_instance[collection_name].create_index(keys, name=index_name, **options)
-                            logger.info(f"{trans('general_index_created', default='Created index on')} {collection_name}: {keys} with options {options}", 
+                            logger.info(f"{trans('general_index_created, default='Created index on')} {collection_name}: {keys} with options {options}", 
                                        extra={'session_id': 'no-session-id'})
                         except Exception as e:
                             if 'IndexKeySpecsConflict' in str(e):
@@ -497,6 +498,28 @@ def initialize_app_data(app):
                                 logger.error(f"Failed to create index on {collection_name}: {str(e)}", 
                                             exc_info=True, extra={'session_id': 'no-session-id'})
                                 raise
+            
+            # Add sample investor_report record if none exist
+            if 'records' in collections:
+                investor_report_exists = db_instance.records.find_one({'type': 'investor_report'})
+                if not investor_report_exists:
+                    sample_report = {
+                        'user_id': 'admin',
+                        'type': 'investor_report',
+                        'title': 'Sample Investor Report',
+                        'report_date': datetime.now(timezone.utc),
+                        'summary': 'This is a sample investor report for testing purposes.',
+                        'financial_highlights': 'Revenue: $100,000; Expenses: $50,000; Net Profit: $50,000',
+                        'created_at': datetime.now(timezone.utc)
+                    }
+                    try:
+                        result = db_instance.records.insert_one(sample_report)
+                        logger.info(f"Created sample investor report with ID: {result.inserted_id}", 
+                                   extra={'session_id': 'no-session-id'})
+                    except Exception as e:
+                        logger.error(f"Failed to create sample investor report: {str(e)}", 
+                                    exc_info=True, extra={'session_id': 'no-session-id'})
+                        raise
             
             # Fix existing user documents to include trial and subscription fields (one-off migration)
             if 'users' in collections:
@@ -916,7 +939,7 @@ def create_record(db, record_data):
         if not all(field in record_data for field in required_fields):
             raise ValueError(trans('general_missing_record_fields', default='Missing required record fields'))
         result = db.records.insert_one(record_data)
-        logger.info(f"{trans('general_record_created', default='Created record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_record_created, default='Created record with ID')}: {result.inserted_id}", 
                    extra={'session_id': record_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -988,7 +1011,7 @@ def create_cashflow(db, cashflow_data):
         if not all(field in cashflow_data for field in required_fields):
             raise ValueError(trans('general_missing_cashflow_fields', default='Missing required cashflow fields'))
         result = db.cashflows.insert_one(cashflow_data)
-        logger.info(f"{trans('general_cashflow_created', default='Created cashflow record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_cashflow_created, default='Created cashflow record with ID')}: {result.inserted_id}", 
                    extra={'session_id': cashflow_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1060,7 +1083,7 @@ def create_audit_log(db, audit_data):
         if not all(field in audit_data for field in required_fields):
             raise ValueError(trans('general_missing_audit_fields', default='Missing required audit log fields'))
         result = db.audit_logs.insert_one(audit_data)
-        logger.info(f"{trans('general_audit_log_created', default='Created audit log with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_audit_log_created, default='Created audit log with ID')}: {result.inserted_id}", 
                    extra={'session_id': audit_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1084,7 +1107,7 @@ def create_feedback(db, feedback_data):
         if not all(field in feedback_data for field in required_fields):
             raise ValueError(trans('general_missing_feedback_fields', default='Missing required feedback fields'))
         result = db.feedback.insert_one(feedback_data)
-        logger.info(f"{trans('general_feedback_created', default='Created feedback with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_feedback_created, default='Created feedback with ID')}: {result.inserted_id}", 
                    extra={'session_id': feedback_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
@@ -1279,7 +1302,7 @@ def create_kyc_record(db, kyc_data):
         if not all(field in kyc_data for field in required_fields):
             raise ValueError(trans('general_missing_kyc_fields', default='Missing required KYC fields'))
         result = db.kyc_records.insert_one(kyc_data)
-        logger.info(f"{trans('general_kyc_created', default='Created KYC record with ID')}: {result.inserted_id}", 
+        logger.info(f"{trans('general_kyc_created, default='Created KYC record with ID')}: {result.inserted_id}", 
                    extra={'session_id': kyc_data.get('session_id', 'no-session-id')})
         return str(result.inserted_id)
     except Exception as e:
