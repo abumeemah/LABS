@@ -11,7 +11,7 @@ import utils
 from users.routes import get_post_login_redirect  # Import the redirect helper
 
 # Use the existing limiter from utils
-from utils import limiter
+from utils import limiter, TRADER_TOOLS, STARTUP_TOOLS, ADMIN_TOOLS
 
 # Exempt crawlers from rate limiting
 def exempt_crawlers():
@@ -22,7 +22,7 @@ def exempt_crawlers():
 general_bp = Blueprint('general_bp', __name__, url_prefix='/general')
 
 @general_bp.route('/landing')
-@limiter.limit("100 per minute", exempt_when=exempt_crawlers)
+@limiter.limit("500 per minute", exempt_when=exempt_crawlers)
 def landing():
     """Render the public landing page."""
     if current_user.is_authenticated:
@@ -93,17 +93,44 @@ def home():
         if user.trial_end and user.trial_end.tzinfo is None:
             user.trial_end = user.trial_end.replace(tzinfo=ZoneInfo("UTC"))
 
-        # --- NEW: Provide all variables needed by the template, with sensible defaults ---
-        # These could be pulled from the DB, computed, or set to 0 if not available.
-        # You may want to replace these with actual logic.
+        # Provide all variables needed by the template, with sensible defaults
         total_i_owe = getattr(user, "total_i_owe", 0) or 0
         total_i_am_owed = getattr(user, "total_i_am_owed", 0) or 0
         net_cashflow = getattr(user, "net_cashflow", 0) or 0
         total_receipts = getattr(user, "total_receipts", 0) or 0
         total_payments = getattr(user, "total_payments", 0) or 0
-        tools_for_template = utils.STARTUP_TOOLS if user.role == "startup" else utils.TRADER_TOOLS if user.role == "trader" else utils.ADMIN_TOOLS
-        explore_features_for_template = utils.get_explore_features()
-        is_read_only = False  # You can set this based on trial/subscription logic
+        tools_for_template = STARTUP_TOOLS if user.role == "startup" else TRADER_TOOLS if user.role == "trader" else ADMIN_TOOLS
+        
+        # Assign role-specific explore features
+        if user.role == "trader":
+            # Select specific trader tools for explore features
+            trader_feature_keys = ["debtors_dashboard", "receipts_dashboard", "business_reports"]
+            explore_features_for_template = [
+                {
+                    "label_key": tool["label_key"],
+                    "description_key": tool["description_key"],
+                    "label": tool["label"],
+                    "description": tool.get("description", "Description not available"),
+                    "url": tool["url"],
+                    "icon": tool["icon"]
+                }
+                for tool in TRADER_TOOLS if tool["label_key"] in trader_feature_keys
+            ]
+        else:
+            # Use all startup/admin tools for explore features
+            tool_list = STARTUP_TOOLS if user.role == "startup" else ADMIN_TOOLS
+            explore_features_for_template = [
+                {
+                    "label_key": tool["label_key"],
+                    "description_key": tool["description_key"],
+                    "label": tool["label"],
+                    "description": tool.get("description", "Description not available"),
+                    "url": tool["url"],
+                    "icon": tool["icon"]
+                }
+                for tool in tool_list
+            ]
+        is_read_only = False
 
         return render_template(
             'general/home.html',
