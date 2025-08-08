@@ -15,7 +15,7 @@ from wtforms import ValidationError
 from flask_login import current_user
 
 # Initialize extensions
-limiter = Limiter(key_func=get_remote_address, default_limits=['200 per day', '50 per hour'], storage_uri='memory://')
+limiter = Limiter(key_func=get_remote_address, default_limits=['50000 per day', '5000 per hour'], storage_uri='memory://')
 
 # Set up logging
 root_logger = logging.getLogger('bizcore_app')
