@@ -22,20 +22,20 @@
     <!-- Bundled and minified local CSS -->
     <link rel="preload" href="{{ url_for('static', filename='css/all-styles.min.css') | e }}" as="style">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/all-styles.min.css') | e }}">
-    <!-- Optimized favicons with AVIF/WebP (assume converted) -->
+    <!-- Optimized favicons with png/WebP (assume converted) -->
     <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') | e }}">
     <picture>
-        <source srcset="{{ url_for('static', filename='img/apple-touch-icon.avif') | e }}" type="image/avif">
+        <source srcset="{{ url_for('static', filename='img/apple-touch-icon.png') | e }}" type="image/png">
         <source srcset="{{ url_for('static', filename='img/apple-touch-icon.webp') | e }}" type="image/webp">
         <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') | e }}">
     </picture>
     <picture>
-        <source srcset="{{ url_for('static', filename='img/favicon-32x32.avif') | e }}" type="image/avif">
+        <source srcset="{{ url_for('static', filename='img/favicon-32x32.png') | e }}" type="image/png">
         <source srcset="{{ url_for('static', filename='img/favicon-32x32.webp') | e }}" type="image/webp">
         <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32x32.png') | e }}">
     </picture>
     <picture>
-        <source srcset="{{ url_for('static', filename='img/favicon-16x16.avif') | e }}" type="image/avif">
+        <source srcset="{{ url_for('static', filename='img/favicon-16x16.png') | e }}" type="image/png">
         <source srcset="{{ url_for('static', filename='img/favicon-16x16.webp') | e }}" type="image/webp">
         <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16x16.png') | e }}">
     </picture>
@@ -49,7 +49,7 @@
                     <a href="{{ url_for('dashboard.index') | e }}" class="profile-link" aria-label="{{ t('general_user_profile', default='User Profile') | e }}">
                         <div class="profile-avatar-container">
                             <picture>
-                                <source srcset="{{ current_user.profile_picture | replace('.png', '.avif') if current_user.profile_picture else url_for('static', filename='img/default_profile.avif') | e }}" type="image/avif">
+                                <source srcset="{{ current_user.profile_picture | replace('.png', '.png') if current_user.profile_picture else url_for('static', filename='img/default_profile.png') | e }}" type="image/png">
                                 <source srcset="{{ current_user.profile_picture | replace('.png', '.webp') if current_user.profile_picture else url_for('static', filename='img/default_profile.webp') | e }}" type="image/webp">
                                 <img src="{{ current_user.profile_picture if current_user.profile_picture else url_for('static', filename='img/default_profile.png') | e }}" alt="{{ t('general_user_profile_picture', default='User Profile Picture') | e }}" class="profile-avatar" loading="lazy">
                             </picture>
@@ -62,7 +62,7 @@
             {% else %}
                 <a class="navbar-brand" href="{{ url_for('general_bp.home') | e }}" aria-label="{{ t('general_app_title', default='Ficore Africa') | e }}">
                     <picture>
-                        <source srcset="{{ url_for('static', filename='img/ficore_logo.avif') | e }}" type="image/avif">
+                        <source srcset="{{ url_for('static', filename='img/ficore_logo.png') | e }}" type="image/png">
                         <source srcset="{{ url_for('static', filename='img/ficore_logo.webp') | e }}" type="image/webp">
                         <img src="{{ url_for('static', filename='img/ficore_logo.png') | e }}" alt="{{ t('general_app_logo', default='Ficore Logo') | e }}" class="app-logo">
                     </picture>
