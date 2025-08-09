@@ -94,7 +94,7 @@ DEBTORS_TRANSLATIONS = {
         'debtors_search_debtors': 'Search debtors...',
     },
     'ha': {
-        'debtors_dashboard': 'Bashi',
+        'debtors_dashboard': 'Ina Bin Bashi',
         'debtors_list': 'Jerin Bin Bashi',
         'debtors_add_debtor': 'Ƙara Mai Bashi',
         'debtors_edit_debtor': 'Gyara Mai Bashi',
